@@ -412,8 +412,23 @@ def validate_experiment(stacks_conf, exp_conf):
                 fail("Trial '{}' reuses local_port {}.".format(trial["name"], local_port))
             if local_port is not None:
                 local_ports.add(int(local_port))
-        if any(flow["cc_algo"] != "cubic" for flow in flows):
-            fail("Trial '{}' must keep cc_algo fixed at 'cubic'.".format(trial["name"]))
+        allowed_cc_algos = set(exp_conf.get("allowed_cc_algos", ["cubic"]))
+        trial_cc_algos = {flow["cc_algo"] for flow in flows}
+        if len(trial_cc_algos) != 1:
+            fail(
+                "Trial '{}' must use the same congestion-control algorithm for both flows.".format(
+                    trial["name"]
+                )
+            )
+        unsupported_cc_algos = trial_cc_algos.difference(allowed_cc_algos)
+        if unsupported_cc_algos:
+            fail(
+                "Trial '{}' uses congestion control {} outside allowed_cc_algos {}.".format(
+                    trial["name"],
+                    ", ".join(sorted(unsupported_cc_algos)),
+                    ", ".join(sorted(allowed_cc_algos)),
+                )
+            )
         if topology_mode == "shared-server-shared-port":
             server_endpoints = {
                 (resolve_server_stack_name(exp_conf, flow), str(flow["port_no"]))
@@ -482,6 +497,20 @@ def validate_server_workload_capabilities(stacks_conf, exp_conf, check_files):
                 fail(
                     "Server stack '{}' fairness object is too small: {} bytes at {}; need at least {}.".format(
                         server_name, actual_bytes, path, requested_bytes
+                    )
+                )
+
+
+def validate_server_cc_capabilities(stacks, exp_conf):
+    for trial in exp_conf["trials"]:
+        for flow in trial["flows"]:
+            server_name = resolve_server_stack_name(exp_conf, flow)
+            requested_cc = flow["cc_algo"]
+            supported = set(stacks[server_name].get_cc_algos())
+            if requested_cc not in supported:
+                fail(
+                    "Server stack '{}' does not support congestion control '{}'; supported: {}.".format(
+                        server_name, requested_cc, ", ".join(sorted(supported))
                     )
                 )
 
@@ -1198,6 +1227,7 @@ def main():
 
     server_ip, interface, server_ingress_interface = itemgetter("server_ip", "interface", "server_ingress_interface")(general_conf)
     stacks = instantiate_stacks(stacks_conf, general_conf)
+    validate_server_cc_capabilities(stacks, exp_conf)
     configure_qlog(stacks, exp_conf.get("enable_qlog", False))
     selected_profiles = get_selected_network_profiles(args, exp_conf)
 

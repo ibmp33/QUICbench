@@ -9,14 +9,22 @@ class Mvfst(QuicGo):
     NAME = "mvfst"
     CUBIC = "cubic"
     BBR = "bbr"
-    RENO = "newreno"
+    RENO = "reno"
+
+    def _pacing_enabled(self):
+        if isinstance(self.server_pacing, bool):
+            return self.server_pacing
+        return str(self.server_pacing).lower() in {"1", "true", "yes", "enabled", "on"}
+
+    def _map_cc_algo(self, cc_algo):
+        return "newreno" if cc_algo == self.RENO else cc_algo
 
     def get_server_runtime_config(self, cc_algo):
         return {
             "cc": cc_algo,
             "requested_cc": cc_algo,
             "icw": "implementation-default",
-            "pacing": "disabled",
+            "pacing": "enabled" if self._pacing_enabled() else "disabled",
             "gso": "enabled",
             "control_source": "server-command-line",
         }
@@ -41,8 +49,10 @@ class Mvfst(QuicGo):
             "--transport=quic",
             "--host={}".format(shlex.quote(self.server_ip)),
             "--port={}".format(shlex.quote(str(port_no))),
-            "--congestion={}".format(shlex.quote(cc_algo or self.CUBIC)),
-            "--pacing=false",
+            "--congestion={}".format(
+                shlex.quote(self._map_cc_algo(cc_algo or self.CUBIC))
+            ),
+            "--pacing={}".format("true" if self._pacing_enabled() else "false"),
             "--gso=true",
             "--num_streams=1",
         ]

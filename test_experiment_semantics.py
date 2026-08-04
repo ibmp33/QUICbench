@@ -181,6 +181,47 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertIn("-s 67108864", command)
         self.assertEqual(plans[0]["requested_bytes"], 67108864)
 
+    def test_sender_mechanism_pilot_switches_quiche_reno_and_pacing(self):
+        experiment = load_json("config/P2_sender_mechanism_pilot.json")
+        experiment["fixed_parameters"]["server_stack_name"] = "quiche"
+        for trial in experiment["trials"]:
+            for flow in trial["flows"]:
+                flow["cc_algo"] = "reno"
+        profiles = load_workload_profiles(
+            os.path.join(ROOT, "config/workloads_conf_default.json")
+        )
+        fairness_runner.activate_workload(experiment, profiles)
+        ack_policies = load_ack_policy_configs(
+            os.path.join(ROOT, "config/ack_policies_default.json")
+        )
+        fairness_runner.activate_ack_policy_configs(experiment, ack_policies)
+        stacks_conf = copy.deepcopy(self.stacks_conf)
+        stacks_conf["quiche"]["server_pacing"] = False
+        fairness_runner.validate_experiment(stacks_conf, experiment)
+        stacks = fairness_runner.instantiate_stacks(stacks_conf, self.general_conf)
+        fairness_runner.validate_server_cc_capabilities(stacks, experiment)
+        plans = fairness_runner.build_flow_plans(
+            stacks, experiment, experiment["trials"][0], "/tmp/quicbench-test"
+        )
+        self.assertIn("--cc-algorithm reno", plans[0]["server_cmd"])
+        self.assertIn("--disable-pacing", plans[0]["server_cmd"])
+        self.assertEqual(
+            stacks["quiche"].get_server_runtime_config("reno")["pacing"],
+            "disabled",
+        )
+
+    def test_mvfst_maps_generic_reno_and_switches_pacing(self):
+        stacks_conf = copy.deepcopy(self.stacks_conf)
+        stacks_conf["mvfst"]["server_pacing"] = True
+        stacks = fairness_runner.instantiate_stacks(stacks_conf, self.general_conf)
+        command = " ".join(stacks["mvfst"].run_server_cmd("6666", 20, "reno"))
+        self.assertIn("--congestion=newreno", command)
+        self.assertIn("--pacing=true", command)
+        self.assertEqual(
+            stacks["mvfst"].get_server_runtime_config("reno")["pacing"],
+            "enabled",
+        )
+
     @mock.patch("run_B0_two_flow_fairness_no_jitter.subprocess.run")
     def test_server_pid_is_resolved_from_namespace_binary(self, run_mock):
         class Result:
