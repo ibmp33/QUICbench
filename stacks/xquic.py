@@ -78,6 +78,11 @@ class Xquic(Stack):
         run_dir = self._get_run_dir(port_no)
         server_addr = self._get_server_addr(port_no)
         cc_algo = cc_algo or self.CUBIC
+        server_slog_path = (
+            os.path.join(run_dir, "qlogs", "server", "xquic-server.slog")
+            if self.qlog_enabled
+            else os.path.join(run_dir, "logs", "xquic-server.slog")
+        )
 
         parts = [
             "cd {}".format(shlex.quote(root_dir)),
@@ -96,7 +101,7 @@ class Xquic(Stack):
             "-r",
             "index.txt",
             "-o",
-            "xquic-server.slog",
+            shlex.quote(server_slog_path),
         ]
         if self.server_pacing:
             server_cmd.append("-C")

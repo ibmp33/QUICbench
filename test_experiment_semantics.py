@@ -222,6 +222,18 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertIn("-s 67108864", command)
         self.assertEqual(plans[0]["requested_bytes"], 67108864)
 
+    def test_xquic_qlog_uses_per_run_path(self):
+        stacks = fairness_runner.instantiate_stacks(
+            self.stacks_conf, self.general_conf
+        )
+        stacks["xquic"].set_run_root("/tmp/quicbench-qlog-test")
+        stacks["xquic"].set_qlog_enabled(True)
+        command = " ".join(stacks["xquic"].run_server_cmd("4433", 20, "cubic"))
+        self.assertIn(
+            "/tmp/quicbench-qlog-test/xquic/4433/qlogs/server/xquic-server.slog",
+            command,
+        )
+
     def test_sender_mechanism_pilot_switches_quiche_reno_and_pacing(self):
         experiment = load_json("config/P2_sender_mechanism_pilot.json")
         experiment["fixed_parameters"]["server_stack_name"] = "quiche"

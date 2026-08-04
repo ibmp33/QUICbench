@@ -32,6 +32,7 @@ command=(
   --pacing off
   --trials 10
   --pcap-policy none
+  --qlog-policy first-only
   --min-free-gb 10
 )
 command+=("$@")

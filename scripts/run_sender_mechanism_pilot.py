@@ -56,6 +56,12 @@ def parse_args():
         "--pcap-policy", choices=["all", "first-only", "none"], default="none"
     )
     parser.add_argument(
+        "--qlog-policy",
+        choices=["all", "first-only", "none"],
+        default="first-only",
+        help="retain qlogs for all repetitions, first repetition per pair, or none",
+    )
+    parser.add_argument(
         "--canary",
         action="store_true",
         help="run one heterogeneous pair once for every selected condition",
@@ -302,7 +308,7 @@ def run_condition(args, exp, stacks, server, trial_count):
             "--pcap-policy",
             args.pcap_policy,
             "--qlog-policy",
-            "none",
+            args.qlog_policy,
         ]
         if args.dry_run:
             command.append("--dry-run")
@@ -340,6 +346,7 @@ def main():
     print("trials_per_pair={}".format(trial_count))
     print("conditions={} total_runs={}".format(condition_count, total_runs))
     print("pcap_policy={}".format(args.pcap_policy))
+    print("qlog_policy={}".format(args.qlog_policy))
     print("sequential=true resume={}".format(not args.no_resume))
     print("minimum_payload_time_minutes={:.1f}".format(total_runs * 20 / 60))
     if "mvfst" in servers:
@@ -386,6 +393,7 @@ def main():
                         pacing,
                         args.canary,
                     )
+                    exp["enable_qlog"] = args.qlog_policy != "none"
                     root = result_root(
                         server, cc_algo, pacing, args.canary
                     )
