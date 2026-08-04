@@ -86,3 +86,37 @@ orders and the Neqo-vs-Neqo and Chromium-vs-Chromium baselines.
 The steady-state window is relative to each request's first client packet, not
 to tcpdump startup. The clients bind fixed UDP ports and wait for the same Unix
 timestamp before sending, allowing deterministic flow matching without qlog.
+
+## P2F fixed-ratio mechanism extension
+
+P2F isolates the ACK-threshold contribution from the Neqo/Chromium policy
+state machines. It runs quiche and xquic with CUBIC, pacing enabled and
+disabled, and the ordered fixed2/fixed10 pairs plus both homogeneous
+baselines. Ten repetitions produce 160 runs. Pcap files are parsed and removed;
+qlogs are retained only for the first repetition of each pair.
+
+Start P2F after the existing P2 sender-mechanism suite has finished:
+
+```sh
+./scripts/run_overnight_fixed_ratio_mechanism.sh
+```
+
+To queue it safely while P2 is still running, use:
+
+```sh
+./scripts/queue_fixed_ratio_after_current.sh
+./scripts/check_overnight_fixed_ratio_mechanism.sh
+```
+
+The queue refreshes the existing sudo authorization, waits for the current P2
+launcher to exit, and starts P2F only when all eight P2 conditions are recorded
+as successful. It does not use a fixed sleep interval and will not overlap the
+two suites.
+
+After P2F completes, calculate policy-centered fixed2 share, role sensitivity,
+homogeneous fairness, pacing effects, and implementation differences:
+
+```sh
+python3 scripts/analyze_fixed_ratio_mechanism.py \
+  /home/ioio33/QUIC_project/results
+```

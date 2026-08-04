@@ -17,10 +17,30 @@ import threading
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 RUNNER = REPO_ROOT / "run_B0_two_flow_fairness_no_jitter.py"
-BASE_EXPERIMENT = REPO_ROOT / "config" / "P2_sender_mechanism_pilot.json"
 BASE_STACKS = REPO_ROOT / "config" / "stacks_conf_default.json"
 RESULTS_ROOT = Path("/home/ioio33/QUIC_project/results")
 BIN_DIR = Path("/home/ioio33/QUIC_project/bin")
+
+SUITES = {
+    "realistic": {
+        "experiment": REPO_ROOT / "config" / "P2_sender_mechanism_pilot.json",
+        "full_prefix": "P2-sender-mechanism",
+        "canary_prefix": "P2-sender-canary",
+        "canary_trial": "M1_neqo_vs_chromium",
+        "status_full": "P2_sender_mechanism_status.json",
+        "status_canary": "P2_sender_canary_status.json",
+        "analysis_script": "scripts/analyze_sender_mechanism_pilot.py",
+    },
+    "fixed-ratio": {
+        "experiment": REPO_ROOT / "config" / "P2_fixed_ratio_mechanism.json",
+        "full_prefix": "P2-fixed-ratio-mechanism",
+        "canary_prefix": "P2-fixed-ratio-canary",
+        "canary_trial": "F1_fixed2_vs_fixed10",
+        "status_full": "P2_fixed_ratio_mechanism_status.json",
+        "status_canary": "P2_fixed_ratio_canary_status.json",
+        "analysis_script": "scripts/analyze_fixed_ratio_mechanism.py",
+    },
+}
 
 CAPABILITIES = {
     "quiche": {"cc": {"cubic", "reno"}, "pacing": True, "protocol": "http3"},
@@ -32,6 +52,12 @@ CAPABILITIES = {
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Run a sequential sender CC x pacing mechanism experiment."
+    )
+    parser.add_argument(
+        "--suite",
+        choices=sorted(SUITES),
+        default="realistic",
+        help="policy suite to run (default: realistic Neqo/Chromium)",
     )
     parser.add_argument(
         "--server",
@@ -145,9 +171,9 @@ def probe_help(binary, help_arg):
     return result.stdout or ""
 
 
-def preflight(servers, stacks_conf, min_free_gb, dry_run):
+def preflight(servers, stacks_conf, experiment_path, min_free_gb, dry_run):
     print("\nPreflight:")
-    if not RUNNER.is_file() or not BASE_EXPERIMENT.is_file():
+    if not RUNNER.is_file() or not experiment_path.is_file():
         raise RuntimeError("runner or P2 config is missing")
     if dry_run:
         print("  local dry-run: Linux binary/sudo/disk probes skipped")
@@ -190,14 +216,16 @@ def ensure_quiche_object(dry_run):
         raise RuntimeError("quiche object is too small: {}".format(path))
 
 
-def condition_prefix(canary):
-    return "P2-sender-canary" if canary else "P2-sender-mechanism"
+def condition_prefix(suite, canary):
+    return suite["canary_prefix"] if canary else suite["full_prefix"]
 
 
-def condition_documents(base_exp, base_stacks, server, cc_algo, pacing, canary):
+def condition_documents(
+    base_exp, base_stacks, suite, server, cc_algo, pacing, canary
+):
     exp = copy.deepcopy(base_exp)
     stacks = copy.deepcopy(base_stacks)
-    prefix = condition_prefix(canary)
+    prefix = condition_prefix(suite, canary)
     condition = "{}-{}-pacing-{}".format(server, cc_algo, pacing)
     exp["experiment_name"] = "{}-{}-pacing-{}".format(prefix, cc_algo, pacing)
     exp["experiment_results_dir"] = str(
@@ -211,7 +239,7 @@ def condition_documents(base_exp, base_stacks, server, cc_algo, pacing, canary):
         exp["trials"] = [
             trial
             for trial in exp["trials"]
-            if trial["name"] == "M1_neqo_vs_chromium"
+            if trial["name"] == suite["canary_trial"]
         ]
     for trial in exp["trials"]:
         for flow in trial["flows"]:
@@ -220,9 +248,9 @@ def condition_documents(base_exp, base_stacks, server, cc_algo, pacing, canary):
     return exp, stacks
 
 
-def result_root(server, cc_algo, pacing, canary):
+def result_root(suite, server, cc_algo, pacing, canary):
     return RESULTS_ROOT / "{}-{}-pacing-{}-{}-server".format(
-        condition_prefix(canary), cc_algo, pacing, server
+        condition_prefix(suite, canary), cc_algo, pacing, server
     )
 
 
@@ -327,9 +355,13 @@ def main():
     cc_algos = args.cc or ["cubic", "reno"]
     pacing_modes = args.pacing or ["on", "off"]
     validate_matrix(servers, cc_algos, pacing_modes)
-    base_exp = load_json(BASE_EXPERIMENT)
+    suite = SUITES[args.suite]
+    experiment_path = suite["experiment"]
+    base_exp = load_json(experiment_path)
     base_stacks = load_json(BASE_STACKS)
-    preflight(servers, base_stacks, args.min_free_gb, args.dry_run)
+    preflight(
+        servers, base_stacks, experiment_path, args.min_free_gb, args.dry_run
+    )
     if args.preflight_only:
         print("PREFLIGHT=PASS")
         return 0
@@ -338,7 +370,11 @@ def main():
     pair_count = 1 if args.canary else len(base_exp["trials"])
     condition_count = len(servers) * len(cc_algos) * len(pacing_modes)
     total_runs = condition_count * pair_count * trial_count
-    print("\nP2 sender mechanism {}".format("canary" if args.canary else "full"))
+    print(
+        "\nP2 {} mechanism {}".format(
+            args.suite, "canary" if args.canary else "full"
+        )
+    )
     print("servers={}".format(" ".join(servers)))
     print("cc_algos={}".format(" ".join(cc_algos)))
     print("pacing={}".format(" ".join(pacing_modes)))
@@ -358,18 +394,15 @@ def main():
         status_path = args.status_file
     elif args.dry_run:
         status_path = Path(tempfile.gettempdir()) / (
-            "P2_sender_canary_status.json"
-            if args.canary
-            else "P2_sender_mechanism_status.json"
+            suite["status_canary"] if args.canary else suite["status_full"]
         )
     else:
         status_path = RESULTS_ROOT / (
-            "P2_sender_canary_status.json"
-            if args.canary
-            else "P2_sender_mechanism_status.json"
+            suite["status_canary"] if args.canary else suite["status_full"]
         )
     status = {
         "started_at": datetime.now().isoformat(),
+        "suite": args.suite,
         "mode": "canary" if args.canary else "full",
         "planned_runs": total_runs,
         "conditions": [],
@@ -388,6 +421,7 @@ def main():
                     exp, stacks = condition_documents(
                         base_exp,
                         base_stacks,
+                        suite,
                         server,
                         cc_algo,
                         pacing,
@@ -395,7 +429,7 @@ def main():
                     )
                     exp["enable_qlog"] = args.qlog_policy != "none"
                     root = result_root(
-                        server, cc_algo, pacing, args.canary
+                        suite, server, cc_algo, pacing, args.canary
                     )
                     trial_names = [trial["name"] for trial in exp["trials"]]
                     record = {
@@ -457,8 +491,8 @@ def main():
     print("P2_SUITE=PASS")
     if not args.canary:
         print(
-            "Analyze with: python3 scripts/analyze_sender_mechanism_pilot.py {}".format(
-                RESULTS_ROOT
+            "Analyze with: python3 {} {}".format(
+                suite["analysis_script"], RESULTS_ROOT
             )
         )
     return 0

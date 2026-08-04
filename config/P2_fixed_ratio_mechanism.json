@@ -1,0 +1,135 @@
+{
+    "experiment_name": "P2-fixed-ratio-mechanism",
+    "description": "Fixed ACK-threshold baselines and role-reversed fixed2/fixed10 contrast for CUBIC pacing mechanism isolation.",
+    "experiment_results_dir": "/home/ioio33/QUIC_project/results/P2-fixed-ratio-mechanism",
+    "num_trials": 10,
+    "workload_name": "pilot",
+    "topology_mode": "shared-server-shared-port",
+    "throughput_window_s": 0.5,
+    "steady_state_window_s": {
+        "start": 5,
+        "end": 15
+    },
+    "enable_qlog": false,
+    "allowed_stack_names": [
+        "quic-go-policy"
+    ],
+    "allowed_cc_algos": [
+        "cubic"
+    ],
+    "fixed_parameters": {
+        "stack_family": "fixed-ratio-sender-mechanism",
+        "server_stack_name": "quic-go",
+        "runtime_model": "20-second fixed ACK-ratio mechanism pilot over two synchronized connections to one server process",
+        "same_bottleneck_bandwidth_mbps": 20,
+        "same_workload_name": "pilot",
+        "same_flow_count": 2,
+        "treatment_dimensions": "server implementation and pacing under CUBIC; fixed ACK threshold role is reversed"
+    },
+    "default_network_profile": "50rtt-20bw-0.5bdp",
+    "network_profiles": [
+        {
+            "name": "50rtt-20bw-0.5bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 0.5,
+                "reverse_bottleneck": false
+            }
+        }
+    ],
+    "trials": [
+        {
+            "name": "F0_fixed2_vs_fixed2",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "F0_fixed10_vs_fixed10",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "F1_fixed2_vs_fixed10",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "test"
+                }
+            ]
+        },
+        {
+            "name": "F2_fixed10_vs_fixed2",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "test"
+                }
+            ]
+        }
+    ]
+}
