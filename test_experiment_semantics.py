@@ -7,7 +7,12 @@ from unittest import mock
 
 from ack_policies import load_ack_policy_configs
 import run_B0_two_flow_fairness_no_jitter as fairness_runner
-from scripts.analyze_sender_mechanism_pilot import resolve_jain
+from scripts.analyze_sender_mechanism_pilot import (
+    baseline_rows,
+    condition_rows,
+    resolve_jain,
+)
+from scripts.run_sender_mechanism_pilot import condition_documents
 from saturation import validate_saturation
 from workloads import load_workload_profiles
 
@@ -106,6 +111,30 @@ class ExperimentSemanticsTest(unittest.TestCase):
             0.4,
         )
         self.assertEqual(recorded, 0.91)
+
+    def test_sender_analysis_separates_baseline_and_role_effects(self):
+        common = {
+            "server": "quiche",
+            "protocol": "http3",
+            "cc": "cubic",
+            "pacing": "enabled",
+            "valid": True,
+            "saturated": True,
+            "jain": 0.95,
+            "share_gap": 0.2,
+        }
+        runs = [
+            dict(common, pair=("neqo", "chromium"), neqo_share=0.6),
+            dict(common, pair=("chromium", "neqo"), neqo_share=0.7),
+            dict(common, pair=("neqo", "neqo"), neqo_share=None),
+        ]
+        conditions = condition_rows(runs)
+        baselines = baseline_rows(runs)
+        self.assertEqual(len(conditions), 1)
+        self.assertAlmostEqual(conditions[0]["neqo_share_mean"], 0.65)
+        self.assertAlmostEqual(conditions[0]["role_difference"], 0.1)
+        self.assertEqual(len(baselines), 1)
+        self.assertEqual(baselines[0]["baseline_policy"], "neqo")
 
     def test_quic_go_declares_effective_server_controls(self):
         stacks = fairness_runner.instantiate_stacks(
@@ -220,6 +249,34 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertEqual(
             stacks["quiche"].get_server_runtime_config("reno")["pacing"],
             "disabled",
+        )
+
+    def test_sender_mechanism_full_has_baselines_and_role_reversal(self):
+        experiment = load_json("config/P2_sender_mechanism_pilot.json")
+        pairs = {
+            tuple(flow["ack_policy"] for flow in trial["flows"])
+            for trial in experiment["trials"]
+        }
+        self.assertEqual(
+            pairs,
+            {
+                ("neqo", "neqo"),
+                ("chromium", "chromium"),
+                ("neqo", "chromium"),
+                ("chromium", "neqo"),
+            },
+        )
+        canary, _ = condition_documents(
+            experiment,
+            self.stacks_conf,
+            "quiche",
+            "reno",
+            "off",
+            True,
+        )
+        self.assertEqual(
+            [trial["name"] for trial in canary["trials"]],
+            ["M1_neqo_vs_chromium"],
         )
 
     def test_mvfst_maps_generic_reno_and_switches_pacing(self):

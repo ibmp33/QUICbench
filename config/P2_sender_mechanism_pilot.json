@@ -42,6 +42,52 @@
     ],
     "trials": [
         {
+            "name": "M0_neqo_vs_neqo",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "neqo",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "neqo",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "M0_chromium_vs_chromium",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "chromium",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "chromium",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
             "name": "M1_neqo_vs_chromium",
             "flows": [
                 {

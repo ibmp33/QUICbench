@@ -84,13 +84,13 @@ def load_runs(root):
         share_a = float(row_a["share"])
         share_b = float(row_b["share"])
         jain = resolve_jain(row_a, row_b, share_a, share_b)
-        if row_a["ack_policy"] == "neqo":
+        pair = (row_a["ack_policy"], row_b["ack_policy"])
+        if pair == ("neqo", "chromium"):
             neqo_share = share_a
-        elif row_b["ack_policy"] == "neqo":
+        elif pair == ("chromium", "neqo"):
             neqo_share = share_b
         else:
-            incomplete.append(str(manifest_path.parent))
-            continue
+            neqo_share = None
         runs.append(
             {
                 "server": flow_a.get("server_stack_name")
@@ -98,8 +98,9 @@ def load_runs(root):
                 "protocol": flow_a.get("protocol") or manifest.get("protocol"),
                 "cc": config_a.get("cc"),
                 "pacing": config_a.get("pacing"),
-                "pair": (row_a["ack_policy"], row_b["ack_policy"]),
+                "pair": pair,
                 "neqo_share": neqo_share,
+                "share_gap": abs(share_a - share_b),
                 "jain": jain,
                 "valid": manifest.get("experiment_valid") is True,
                 "saturated": manifest.get("saturation_validation", {}).get("valid")
@@ -125,13 +126,24 @@ def condition_rows(runs):
     grouped = {}
     for run in runs:
         key = (run["server"], run["protocol"], run["cc"], run["pacing"])
-        grouped.setdefault(key, []).append(run)
+        if run["neqo_share"] is not None:
+            grouped.setdefault(key, []).append(run)
     rows = []
     for key, samples in sorted(grouped.items()):
         analysis_samples = [
             sample for sample in samples if sample["valid"] and sample["saturated"]
         ]
         shares = [sample["neqo_share"] for sample in analysis_samples]
+        shares_when_a = [
+            sample["neqo_share"]
+            for sample in analysis_samples
+            if sample["pair"] == ("neqo", "chromium")
+        ]
+        shares_when_b = [
+            sample["neqo_share"]
+            for sample in analysis_samples
+            if sample["pair"] == ("chromium", "neqo")
+        ]
         rows.append(
             {
                 "server": key[0],
@@ -144,8 +156,47 @@ def condition_rows(runs):
                 "saturated_n": sum(sample["saturated"] for sample in samples),
                 "neqo_share_mean": mean(shares),
                 "neqo_share_stddev": stddev(shares),
+                "neqo_share_when_a": mean(shares_when_a),
+                "neqo_share_when_b": mean(shares_when_b),
+                "role_difference": abs(mean(shares_when_a) - mean(shares_when_b))
+                if shares_when_a and shares_when_b
+                else float("nan"),
                 "neqo_wins": sum(value > 0.5 for value in shares),
                 "jain_mean": mean([sample["jain"] for sample in analysis_samples]),
+            }
+        )
+    return rows
+
+
+def baseline_rows(runs):
+    grouped = {}
+    for run in runs:
+        if run["pair"][0] != run["pair"][1]:
+            continue
+        key = (
+            run["server"],
+            run["protocol"],
+            run["cc"],
+            run["pacing"],
+            run["pair"][0],
+        )
+        grouped.setdefault(key, []).append(run)
+    rows = []
+    for key, samples in sorted(grouped.items()):
+        usable = [sample for sample in samples if sample["valid"] and sample["saturated"]]
+        rows.append(
+            {
+                "server": key[0],
+                "protocol": key[1],
+                "cc": key[2],
+                "pacing": key[3],
+                "baseline_policy": key[4],
+                "n": len(samples),
+                "analysis_n": len(usable),
+                "valid_n": sum(sample["valid"] for sample in samples),
+                "saturated_n": sum(sample["saturated"] for sample in samples),
+                "share_gap_mean": mean([sample["share_gap"] for sample in usable]),
+                "jain_mean": mean([sample["jain"] for sample in usable]),
             }
         )
     return rows
@@ -211,7 +262,7 @@ def effect_rows(conditions):
     return effects
 
 
-def write_csv(path, conditions, effects):
+def write_csv(path, conditions, baselines, effects):
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "row_type",
@@ -225,8 +276,13 @@ def write_csv(path, conditions, effects):
         "saturated_n",
         "neqo_share_mean",
         "neqo_share_stddev",
+        "neqo_share_when_a",
+        "neqo_share_when_b",
+        "role_difference",
         "neqo_wins",
         "jain_mean",
+        "baseline_policy",
+        "share_gap_mean",
         "effect",
         "stratum",
         "estimate",
@@ -236,6 +292,8 @@ def write_csv(path, conditions, effects):
         writer.writeheader()
         for row in conditions:
             writer.writerow(dict(row, row_type="condition"))
+        for row in baselines:
+            writer.writerow(dict(row, row_type="baseline"))
         for row in effects:
             writer.writerow(dict(row, row_type="effect"))
 
@@ -246,12 +304,13 @@ def main():
     if not runs:
         raise SystemExit("No completed P2 sender mechanism runs found")
     conditions = condition_rows(runs)
+    baselines = baseline_rows(runs)
     effects = effect_rows(conditions)
     print("P2 sender mechanism numeric analysis")
     for row in conditions:
         print(
             "server={} protocol={} cc={} pacing={} usable={}/{} valid={}/{} saturated={}/{} "
-            "neqo_share={} std={} wins={}/{} jain={:.5f}".format(
+            "neqo_share={} std={} role_A={} role_B={} role_diff={} wins={}/{} jain={:.5f}".format(
                 row["server"],
                 row["protocol"],
                 row["cc"],
@@ -264,11 +323,30 @@ def main():
                 row["n"],
                 pct(row["neqo_share_mean"]),
                 pct(row["neqo_share_stddev"]),
+                pct(row["neqo_share_when_a"]),
+                pct(row["neqo_share_when_b"]),
+                pct(row["role_difference"]),
                 row["neqo_wins"],
                 row["analysis_n"],
                 row["jain_mean"],
             )
         )
+    if baselines:
+        print("\nHomogeneous baselines:")
+        for row in baselines:
+            print(
+                "server={} cc={} pacing={} policy={}/{} usable={}/{} mean_gap={} jain={:.5f}".format(
+                    row["server"],
+                    row["cc"],
+                    row["pacing"],
+                    row["baseline_policy"],
+                    row["baseline_policy"],
+                    row["analysis_n"],
+                    row["n"],
+                    pct(row["share_gap_mean"]),
+                    row["jain_mean"],
+                )
+            )
     print("\nEffects on Neqo share (percentage-point interpretation):")
     for row in effects:
         print(
@@ -280,7 +358,7 @@ def main():
             )
         )
     output = args.csv_out or args.results_root / "P2_sender_mechanism_effects.csv"
-    write_csv(output, conditions, effects)
+    write_csv(output, conditions, baselines, effects)
     print("\ncsv={}".format(output))
     if incomplete:
         print("warning=incomplete_or_inconsistent_runs ignored={}".format(len(incomplete)))
