@@ -101,6 +101,33 @@ echo "workload=64MiB/20s measurement=5-15s"
 echo "network=$NETWORK_PROFILE"
 echo "pcap_policy=$PCAP_POLICY"
 echo "note=mvfst uses raw QUIC and is exploratory, not directly H3-equivalent"
+echo
+echo "Planned sender conditions:"
+printf '  %-10s %-8s %-9s %-22s %s\n' "server" "cc" "pacing" "gso" "control"
+for server in "${SERVERS[@]}"; do
+  case "$server" in
+    quic-go)
+      printf '  %-10s %-8s %-9s %-22s %s\n' \
+        "$server" "cubic" "enabled" "implementation-default" "binary-build"
+      ;;
+    quiche)
+      printf '  %-10s %-8s %-9s %-22s %s\n' \
+        "$server" "cubic" "enabled" "enabled" "server-command-line"
+      ;;
+    xquic)
+      printf '  %-10s %-8s %-9s %-22s %s\n' \
+        "$server" "cubic" "enabled" "implementation-default" "server-command-line"
+      ;;
+    mvfst)
+      printf '  %-10s %-8s %-9s %-22s %s\n' \
+        "$server" "cubic" "disabled" "enabled" "server-command-line"
+      ;;
+  esac
+done
+echo "note=conditions are fixed controls in this pilot, not CC/pacing treatment arms"
+if printf '%s\n' "${SERVERS[@]}" | grep -qx mvfst; then
+  echo "warning=mvfst differs in both protocol (raw) and pacing (disabled); analyze separately"
+fi
 
 if ((DRY_RUN == 0)); then
   sudo -v

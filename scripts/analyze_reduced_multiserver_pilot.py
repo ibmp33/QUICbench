@@ -78,6 +78,16 @@ def load_runs(profile_root):
             continue
         row_a = by_flow["flow_a"]
         row_b = by_flow["flow_b"]
+        manifest_flows = manifest.get("flows", [])
+        server_configs = [
+            flow.get("server_config")
+            for flow in manifest_flows
+            if isinstance(flow.get("server_config"), dict)
+        ]
+        normalized_configs = {
+            json.dumps(config, sort_keys=True) for config in server_configs
+        }
+        server_config = server_configs[0] if server_configs else {}
         runs.append(
             {
                 "trial": trial_name,
@@ -89,6 +99,9 @@ def load_runs(profile_root):
                 "saturated": manifest.get("saturation_validation", {}).get("valid")
                 is True,
                 "protocol": manifest.get("protocol"),
+                "server_config": server_config,
+                "server_config_consistent": len(server_configs) == 2
+                and len(normalized_configs) == 1,
             }
         )
     return runs, incomplete
@@ -140,6 +153,11 @@ def main():
         runs, incomplete = load_runs(root)
         any_incomplete = any_incomplete or bool(incomplete)
         protocols = sorted({run["protocol"] for run in runs if run["protocol"]})
+        observed_configs = {
+            json.dumps(run["server_config"], sort_keys=True)
+            for run in runs
+            if run["server_config"]
+        }
         print("server={} protocol={}".format(server, ",".join(protocols) or "unknown"))
         print(
             "  completion={}/{} valid={}/{} saturated={}/{}".format(
@@ -151,6 +169,26 @@ def main():
                 len(runs),
             )
         )
+        print(
+            "  server_config_consistent={}/{} distinct_conditions={}".format(
+                sum(run["server_config_consistent"] for run in runs),
+                len(runs),
+                len(observed_configs),
+            )
+        )
+        for encoded in sorted(observed_configs):
+            config = json.loads(encoded)
+            print(
+                "  sender_condition cc={} requested_cc={} pacing={} gso={} control={}".format(
+                    config.get("cc", "unknown"),
+                    config.get("requested_cc", "unknown"),
+                    config.get("pacing", "unknown"),
+                    config.get("gso", "unknown"),
+                    config.get("control_source", "unknown"),
+                )
+            )
+        if len(observed_configs) > 1:
+            print("  WARNING: sender conditions drifted across selected runs")
         grouped = defaultdict(list)
         for run in runs:
             grouped[run["pair"]].append(run)
