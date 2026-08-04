@@ -35,6 +35,7 @@ class Xquic(Stack):
         server_pacing=True,
         server_gso="implementation-default",
         workload_capabilities=None,
+        server_response_bytes=None,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -58,6 +59,9 @@ class Xquic(Stack):
         self.server_pacing = bool(server_pacing)
         self.server_gso = server_gso
         self.workload_capabilities = workload_capabilities or {}
+        self.server_response_bytes = (
+            int(server_response_bytes) if server_response_bytes is not None else None
+        )
         self.run_root = None
         self.qlog_enabled = False
 
@@ -96,6 +100,8 @@ class Xquic(Stack):
         ]
         if self.server_pacing:
             server_cmd.append("-C")
+        if self.server_response_bytes is not None:
+            server_cmd.extend(["-s", shlex.quote(str(self.server_response_bytes))])
 
         parts.append(
             "timeout {} {}".format(int(duration_s), " ".join(server_cmd))

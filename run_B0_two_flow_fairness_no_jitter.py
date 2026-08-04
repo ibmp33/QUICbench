@@ -434,7 +434,7 @@ def validate_experiment(stacks_conf, exp_conf):
 def validate_server_workload_capabilities(stacks_conf, exp_conf, check_files):
     workload = exp_conf["workload"]
     workload_name = workload["name"]
-    if workload_name != "fairness":
+    if workload_name in {"smoke", "legacy-validation"}:
         return
     server_names = {
         resolve_server_stack_name(exp_conf, flow)

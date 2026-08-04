@@ -3,6 +3,10 @@
         "bytes": 16777216,
         "duration_s": 10
     },
+    "pilot": {
+        "bytes": 67108864,
+        "duration_s": 20
+    },
     "fairness": {
         "bytes": 1073741824,
         "duration_s": 60

@@ -129,6 +129,58 @@ class ExperimentSemanticsTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             fairness_runner.validate_experiment(self.stacks_conf, experiment)
 
+    def test_reduced_pilot_has_five_pairs_and_short_saturated_workload(self):
+        experiment = load_json("config/P1_reduced_policy_pilot.json")
+        profiles = load_workload_profiles(
+            os.path.join(ROOT, "config/workloads_conf_default.json")
+        )
+        fairness_runner.activate_workload(experiment, profiles)
+        ack_policies = load_ack_policy_configs(
+            os.path.join(ROOT, "config/ack_policies_default.json")
+        )
+        fairness_runner.activate_ack_policy_configs(experiment, ack_policies)
+        fairness_runner.validate_experiment(self.stacks_conf, experiment)
+        self.assertEqual(experiment["workload"]["bytes"], 67108864)
+        self.assertEqual(experiment["workload"]["duration_s"], 20)
+        self.assertEqual(experiment["steady_state_window_s"], {"start": 5, "end": 15})
+        self.assertEqual(
+            {
+                tuple(flow["ack_policy"] for flow in trial["flows"])
+                for trial in experiment["trials"]
+            },
+            {
+                ("neqo", "neqo"),
+                ("neqo", "chromium"),
+                ("chromium", "neqo"),
+                ("neqo", "fixed10"),
+                ("fixed10", "neqo"),
+            },
+        )
+
+    def test_xquic_pilot_uses_bounded_h3_body_cubic_and_pacing(self):
+        experiment = load_json("config/P1_reduced_policy_pilot.json")
+        experiment["fixed_parameters"]["server_stack_name"] = "xquic"
+        profiles = load_workload_profiles(
+            os.path.join(ROOT, "config/workloads_conf_default.json")
+        )
+        fairness_runner.activate_workload(experiment, profiles)
+        ack_policies = load_ack_policy_configs(
+            os.path.join(ROOT, "config/ack_policies_default.json")
+        )
+        fairness_runner.activate_ack_policy_configs(experiment, ack_policies)
+        fairness_runner.validate_experiment(self.stacks_conf, experiment)
+        stacks = fairness_runner.instantiate_stacks(
+            self.stacks_conf, self.general_conf
+        )
+        plans = fairness_runner.build_flow_plans(
+            stacks, experiment, experiment["trials"][0], "/tmp/quicbench-test"
+        )
+        command = plans[0]["server_cmd"]
+        self.assertIn("-c c", command)
+        self.assertIn("-C", command)
+        self.assertIn("-s 67108864", command)
+        self.assertEqual(plans[0]["requested_bytes"], 67108864)
+
     @mock.patch("run_B0_two_flow_fairness_no_jitter.subprocess.run")
     def test_server_pid_is_resolved_from_namespace_binary(self, run_mock):
         class Result:

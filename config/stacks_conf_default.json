@@ -10,6 +10,7 @@
         "client_url_template": "https://{server_ip}:{port}/index.txt",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/index.txt",
+            "pilot": "https://{server_ip}:{port}/64MB.bin",
             "fairness": "https://{server_ip}:{port}/1GB.bin"
         },
         "protocol": "http3",
@@ -17,6 +18,10 @@
         "server_pacing": true,
         "server_gso": true,
         "workload_capabilities": {
+            "pilot": {
+                "mode": "static-file",
+                "path": "/home/ioio33/QUIC_project/bin/64MB.bin"
+            },
             "fairness": {
                 "mode": "static-file",
                 "path": "/home/ioio33/QUIC_project/bin/1GB.bin"
@@ -37,6 +42,7 @@
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "pilot": "https://{server_ip}:{port}/bytes/{bytes}",
             "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
         },
         "protocol": "http3",
@@ -45,6 +51,9 @@
         "server_pacing": "enabled",
         "server_gso": "implementation-default",
         "workload_capabilities": {
+            "pilot": {
+                "mode": "dynamic-response"
+            },
             "fairness": {
                 "mode": "dynamic-response"
             }
@@ -64,6 +73,7 @@
         "client_url_template": "https://{server_ip}:{port}/path/resource",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/path/resource",
+            "pilot": "https://{server_ip}:{port}/path/resource",
             "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
         },
         "client_server_name": "test.xquic.com",
@@ -71,7 +81,11 @@
         "default_port": 8443,
         "server_pacing": true,
         "server_gso": "implementation-default",
+        "server_response_bytes": 67108864,
         "workload_capabilities": {
+            "pilot": {
+                "mode": "dynamic-response"
+            },
             "fairness": {
                 "mode": "blocked",
                 "reason": "xquic test_server H3 response is capped at 100 MiB and -L only applies to raw streams; rebuild a verified continuous H3 server before P1"
@@ -97,6 +111,9 @@
         "server_pacing": "disabled",
         "server_gso": "enabled",
         "workload_capabilities": {
+            "pilot": {
+                "mode": "continuous-stream"
+            },
             "fairness": {
                 "mode": "continuous-stream"
             }
@@ -116,6 +133,7 @@
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "pilot": "https://{server_ip}:{port}/bytes/{bytes}",
             "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
         },
         "protocol": "http3",
@@ -124,6 +142,9 @@
         "server_pacing": "enabled",
         "server_gso": "implementation-default",
         "workload_capabilities": {
+            "pilot": {
+                "mode": "dynamic-response"
+            },
             "fairness": {
                 "mode": "dynamic-response"
             }
@@ -143,6 +164,7 @@
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "pilot": "https://{server_ip}:{port}/bytes/{bytes}",
             "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
         },
         "protocol": "http3",
@@ -151,6 +173,9 @@
         "server_pacing": "enabled",
         "server_gso": "implementation-default",
         "workload_capabilities": {
+            "pilot": {
+                "mode": "dynamic-response"
+            },
             "fairness": {
                 "mode": "dynamic-response"
             }
@@ -170,6 +195,7 @@
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "pilot": "https://{server_ip}:{port}/bytes/{bytes}",
             "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
         },
         "protocol": "http3",
@@ -178,6 +204,9 @@
         "server_pacing": "enabled",
         "server_gso": "implementation-default",
         "workload_capabilities": {
+            "pilot": {
+                "mode": "dynamic-response"
+            },
             "fairness": {
                 "mode": "dynamic-response"
             }
@@ -197,6 +226,7 @@
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "pilot": "https://{server_ip}:{port}/bytes/{bytes}",
             "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
         },
         "protocol": "http3",
@@ -205,6 +235,9 @@
         "server_pacing": "enabled",
         "server_gso": "implementation-default",
         "workload_capabilities": {
+            "pilot": {
+                "mode": "dynamic-response"
+            },
             "fairness": {
                 "mode": "dynamic-response"
             }
