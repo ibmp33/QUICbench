@@ -89,6 +89,46 @@ class ExperimentSemanticsTest(unittest.TestCase):
             },
         )
 
+    def test_pcap_retention_policy_keeps_only_first_repetition(self):
+        self.assertTrue(fairness_runner.should_keep_artifact("all", 7))
+        self.assertTrue(fairness_runner.should_keep_artifact("first-only", 1))
+        self.assertFalse(fairness_runner.should_keep_artifact("first-only", 2))
+        self.assertFalse(fairness_runner.should_keep_artifact("none", 1))
+
+    def test_quic_go_declares_effective_server_controls(self):
+        stacks = fairness_runner.instantiate_stacks(
+            self.stacks_conf, self.general_conf
+        )
+        runtime = stacks["quic-go"].get_server_runtime_config("cubic")
+        self.assertEqual(runtime["cc"], "cubic")
+        self.assertEqual(runtime["pacing"], "enabled")
+        self.assertEqual(runtime["control_source"], "binary-build")
+
+    def test_quiche_fairness_uses_static_object_and_explicit_controls(self):
+        experiment = copy.deepcopy(self.exp_conf)
+        experiment["fixed_parameters"]["server_stack_name"] = "quiche"
+        fairness_runner.validate_experiment(self.stacks_conf, experiment)
+        stacks = fairness_runner.instantiate_stacks(
+            self.stacks_conf, self.general_conf
+        )
+        plans = fairness_runner.build_flow_plans(
+            stacks, experiment, experiment["trials"][0], "/tmp/quicbench-test"
+        )
+        self.assertEqual(
+            {plan["generated_target"] for plan in plans},
+            {"https://198.19.0.2:4433/1GB.bin"},
+        )
+        command = plans[0]["server_cmd"]
+        self.assertIn("--cc-algorithm cubic", command)
+        self.assertNotIn("--disable-pacing", command)
+        self.assertNotIn("--disable-gso", command)
+
+    def test_xquic_fairness_is_blocked_until_continuous_h3_is_verified(self):
+        experiment = copy.deepcopy(self.exp_conf)
+        experiment["fixed_parameters"]["server_stack_name"] = "xquic"
+        with self.assertRaises(SystemExit):
+            fairness_runner.validate_experiment(self.stacks_conf, experiment)
+
     @mock.patch("run_B0_two_flow_fairness_no_jitter.subprocess.run")
     def test_server_pid_is_resolved_from_namespace_binary(self, run_mock):
         class Result:

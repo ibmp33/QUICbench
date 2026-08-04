@@ -11,6 +11,16 @@ class Mvfst(QuicGo):
     BBR = "bbr"
     RENO = "newreno"
 
+    def get_server_runtime_config(self, cc_algo):
+        return {
+            "cc": cc_algo,
+            "requested_cc": cc_algo,
+            "icw": "implementation-default",
+            "pacing": "disabled",
+            "gso": "enabled",
+            "control_source": "server-command-line",
+        }
+
     def run_remote_server(self, port_no, cc_algo, duration_s):
         cmd = self.run_server_cmd(port_no, duration_s, cc_algo=cc_algo)
         return subprocess.Popen(cmd)

@@ -33,6 +33,9 @@ class Quiche(Stack):
         client_server_name=None,
         protocol="http3",
         default_port=None,
+        server_pacing=True,
+        server_gso=True,
+        workload_capabilities=None,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -53,6 +56,9 @@ class Quiche(Stack):
         self.client_server_name = client_server_name
         self.protocol = protocol
         self.default_port = default_port
+        self.server_pacing = bool(server_pacing)
+        self.server_gso = bool(server_gso)
+        self.workload_capabilities = workload_capabilities or {}
         self.run_root = None
         self.qlog_enabled = False
 
@@ -90,7 +96,13 @@ class Quiche(Stack):
             "--http-version",
             "HTTP/3",
             "--no-retry",
+            "--cc-algorithm",
+            shlex.quote(cc_algo),
         ]
+        if not self.server_pacing:
+            server_cmd.append("--disable-pacing")
+        if not self.server_gso:
+            server_cmd.append("--disable-gso")
         if self.server_root:
             server_cmd.extend(["--root", shlex.quote(self.server_root)])
             server_cmd.extend(["--index", shlex.quote(os.path.basename(self._get_client_url(port_no).split("/")[-1] or "index.txt"))])
@@ -115,6 +127,16 @@ class Quiche(Stack):
             "-lc",
             shell_cmd,
         ]
+
+    def get_server_runtime_config(self, cc_algo):
+        return {
+            "cc": cc_algo,
+            "requested_cc": cc_algo,
+            "icw": "implementation-default",
+            "pacing": "enabled" if self.server_pacing else "disabled",
+            "gso": "enabled" if self.server_gso else "disabled",
+            "control_source": "server-command-line",
+        }
 
     def run_client_cmd(self, port_no, duration_s, cc_algo=None):
         root_dir = self._get_root_dir(self.client_path)

@@ -10,10 +10,18 @@
         "client_url_template": "https://{server_ip}:{port}/index.txt",
         "workload_url_templates": {
             "smoke": "https://{server_ip}:{port}/index.txt",
-            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+            "fairness": "https://{server_ip}:{port}/1GB.bin"
         },
         "protocol": "http3",
         "default_port": 4433,
+        "server_pacing": true,
+        "server_gso": true,
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "static-file",
+                "path": "/home/ioio33/QUIC_project/bin/1GB.bin"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -33,6 +41,14 @@
         },
         "protocol": "http3",
         "default_port": 4445,
+        "server_cc_algo": "cubic",
+        "server_pacing": "enabled",
+        "server_gso": "implementation-default",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "dynamic-response"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -53,6 +69,14 @@
         "client_server_name": "test.xquic.com",
         "protocol": "http3",
         "default_port": 8443,
+        "server_pacing": true,
+        "server_gso": "implementation-default",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "blocked",
+                "reason": "xquic test_server H3 response is capped at 100 MiB and -L only applies to raw streams; rebuild a verified continuous H3 server before P1"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -69,6 +93,14 @@
         "client_addr_template": "{server_ip}:{port}",
         "protocol": "raw",
         "default_port": 6666,
+        "server_cc_algo": "cubic",
+        "server_pacing": "disabled",
+        "server_gso": "enabled",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "continuous-stream"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -88,6 +120,14 @@
         },
         "protocol": "http3",
         "default_port": 4445,
+        "server_cc_algo": "cubic",
+        "server_pacing": "enabled",
+        "server_gso": "implementation-default",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "dynamic-response"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -107,6 +147,14 @@
         },
         "protocol": "http3",
         "default_port": 4445,
+        "server_cc_algo": "cubic",
+        "server_pacing": "enabled",
+        "server_gso": "implementation-default",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "dynamic-response"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -126,6 +174,14 @@
         },
         "protocol": "http3",
         "default_port": 4445,
+        "server_cc_algo": "cubic",
+        "server_pacing": "enabled",
+        "server_gso": "implementation-default",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "dynamic-response"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"
@@ -145,6 +201,14 @@
         },
         "protocol": "http3",
         "default_port": 4445,
+        "server_cc_algo": "cubic",
+        "server_pacing": "enabled",
+        "server_gso": "implementation-default",
+        "workload_capabilities": {
+            "fairness": {
+                "mode": "dynamic-response"
+            }
+        },
         "client_timeout": null,
         "server_netns": "quicbench-server",
         "client_netns": "quicbench-client"

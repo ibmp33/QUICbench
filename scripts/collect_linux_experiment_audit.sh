@@ -290,7 +290,7 @@ if [[ -d "$RESULTS_ROOT" ]]; then
   run_cmd bash -o pipefail -c 'find "$1" -type f -name run_manifest.json -printf "%T@ %h\n" | sort -n | tail -n 12' _ "$RESULTS_ROOT"
   echo
   echo "Largest retained artifacts:"
-  run_cmd bash -o pipefail -c 'find "$1" -type f -printf "%s %p\n" | sort -nr | head -n 20' _ "$RESULTS_ROOT"
+  run_cmd bash -o pipefail -c 'find "$1" -type f -printf "%s %p\n" | sort -nr | sed -n "1,20p"' _ "$RESULTS_ROOT"
 else
   echo "[audit] results directory does not exist: $RESULTS_ROOT"
   run_cmd df -h /home/ioio33/QUIC_project/results

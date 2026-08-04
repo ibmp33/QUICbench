@@ -34,6 +34,10 @@ class QuicGo(Stack):
         client_server_name=None,
         protocol="http3",
         default_port=None,
+        server_cc_algo="cubic",
+        server_pacing="enabled",
+        server_gso="implementation-default",
+        workload_capabilities=None,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -54,11 +58,15 @@ class QuicGo(Stack):
         self.client_server_name = client_server_name
         self.protocol = protocol
         self.default_port = default_port
+        self.server_cc_algo = server_cc_algo
+        self.server_pacing = server_pacing
+        self.server_gso = server_gso
+        self.workload_capabilities = workload_capabilities or {}
         self.run_root = None
         self.qlog_enabled = False
 
     def run_remote_server(self, port_no, cc_algo, duration_s):
-        cmd = self.run_server_cmd(port_no, duration_s)
+        cmd = self.run_server_cmd(port_no, duration_s, cc_algo=cc_algo)
         return subprocess.Popen(cmd)
 
     def run_client(
@@ -81,7 +89,14 @@ class QuicGo(Stack):
         )
         return subprocess.Popen(cmd, shell=True)
 
-    def run_server_cmd(self, port_no, duration_s):
+    def run_server_cmd(self, port_no, duration_s, cc_algo=None):
+        requested_cc = cc_algo or self.server_cc_algo
+        if requested_cc != self.server_cc_algo:
+            raise ValueError(
+                "quic-go server binary is fixed to {!r}; requested {!r}".format(
+                    self.server_cc_algo, requested_cc
+                )
+            )
         root_dir = self._get_root_dir(self.server_path)
         run_dir = self._get_run_dir(port_no)
         server_addr = self._get_server_addr(port_no)
@@ -129,6 +144,16 @@ class QuicGo(Stack):
             "-lc",
             shell_cmd,
         ]
+
+    def get_server_runtime_config(self, cc_algo):
+        return {
+            "cc": self.server_cc_algo,
+            "requested_cc": cc_algo,
+            "icw": "implementation-default",
+            "pacing": self.server_pacing,
+            "gso": self.server_gso,
+            "control_source": "binary-build",
+        }
 
     def run_client_cmd(
         self,

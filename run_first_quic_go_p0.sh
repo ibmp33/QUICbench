@@ -12,9 +12,10 @@ GENERAL_CONFIG="config/general_conf_default.json"
 NETWORK_PROFILE="50rtt-20bw-0.5bdp"
 RESULTS_ROOT="/home/ioio33/QUIC_project/results/P0-policy-fairness-quic-go-server"
 TRIALS=1
+PCAP_POLICY="first-only"
 
 usage() {
-  echo "Usage: ./run_first_quic_go_p0.sh [--trials N]" >&2
+  echo "Usage: ./run_first_quic_go_p0.sh [--trials N] [--pcap-policy all|first-only|none]" >&2
 }
 
 while (($# > 0)); do
@@ -25,6 +26,14 @@ while (($# > 0)); do
         exit 2
       fi
       TRIALS="$2"
+      shift 2
+      ;;
+    --pcap-policy)
+      if (($# < 2)); then
+        usage
+        exit 2
+      fi
+      PCAP_POLICY="$2"
       shift 2
       ;;
     -h|--help)
@@ -43,6 +52,14 @@ if [[ ! "$TRIALS" =~ ^[1-9][0-9]*$ ]]; then
   echo "--trials must be a positive integer." >&2
   exit 2
 fi
+
+case "$PCAP_POLICY" in
+  all|first-only|none) ;;
+  *)
+    echo "--pcap-policy must be all, first-only, or none." >&2
+    exit 2
+    ;;
+esac
 
 if [[ "$(pwd -P)" != "$EXPECTED_CWD" ]]; then
   echo "Run this script from the QUICbench repository root: $EXPECTED_CWD" >&2
@@ -138,6 +155,9 @@ chromium/neqo
 
 Repetitions per ordered pair:
 $TRIALS
+
+PCAP retention:
+$PCAP_POLICY
 EOF
 
 echo
@@ -156,7 +176,7 @@ python3 "$RUNNER" \
   --network-profile "$NETWORK_PROFILE" \
   --num-trials "$TRIALS" \
   --keep-run-artifacts \
-  --keep-pcap \
+  --pcap-policy "$PCAP_POLICY" \
   --qlog-policy none
 
 if [[ ! -d "$PROFILE_RESULTS" ]]; then

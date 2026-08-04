@@ -63,7 +63,17 @@ def get_prog_args():
         help="run one named network profile from exp_conf; repeat the flag to run multiple profiles",
     )
     parser.add_argument("--dry-run", action="store_true", help="validate config and print commands without launching processes")
-    parser.add_argument("--keep-pcap", action="store_true", help="keep packets.pcap after parsing")
+    parser.add_argument(
+        "--pcap-policy",
+        choices=["all", "first-only", "none"],
+        default=None,
+        help="retain pcaps for all runs, only the first run of each policy pair, or none",
+    )
+    parser.add_argument(
+        "--keep-pcap",
+        action="store_true",
+        help="deprecated compatibility alias for --pcap-policy all",
+    )
     parser.add_argument(
         "--keep-run-artifacts",
         action="store_true",
@@ -254,6 +264,14 @@ def apply_runtime_overrides(args, exp_conf):
         exp_conf["num_trials"] = args.num_trials
 
 
+def resolve_pcap_policy(args):
+    if args.keep_pcap and args.pcap_policy not in (None, "all"):
+        fail("--keep-pcap cannot be combined with --pcap-policy {}.".format(args.pcap_policy))
+    if args.keep_pcap:
+        return "all"
+    return args.pcap_policy or "none"
+
+
 def activate_workload(exp_conf, workload_profiles):
     workload_name = exp_conf.get("workload_name")
     if not workload_name:
@@ -325,6 +343,7 @@ def validate_experiment(stacks_conf, exp_conf):
     workload = exp_conf.get("workload")
     if not workload:
         fail("An active workload profile is required.")
+    validate_server_workload_capabilities(stacks_conf, exp_conf, check_files=False)
     ack_policy_configs = exp_conf.get("ack_policy_configs") or {}
     topology_mode = exp_conf.get("topology_mode")
     allowed_topologies = {
@@ -412,6 +431,61 @@ def validate_experiment(stacks_conf, exp_conf):
                 )
 
 
+def validate_server_workload_capabilities(stacks_conf, exp_conf, check_files):
+    workload = exp_conf["workload"]
+    workload_name = workload["name"]
+    if workload_name != "fairness":
+        return
+    server_names = {
+        resolve_server_stack_name(exp_conf, flow)
+        for trial in exp_conf["trials"]
+        for flow in trial["flows"]
+    }
+    for server_name in server_names:
+        capability = (
+            stacks_conf[server_name]
+            .get("workload_capabilities", {})
+            .get(workload_name)
+        )
+        if not capability:
+            fail(
+                "Server stack '{}' does not declare support for workload '{}'.".format(
+                    server_name, workload_name
+                )
+            )
+        mode = capability.get("mode")
+        if mode == "blocked":
+            fail(
+                "Server stack '{}' is not ready for workload '{}': {}".format(
+                    server_name,
+                    workload_name,
+                    capability.get("reason", "adapter capability is blocked"),
+                )
+            )
+        if mode not in {"dynamic-response", "static-file", "continuous-stream"}:
+            fail(
+                "Server stack '{}' has unsupported workload capability mode {!r}.".format(
+                    server_name, mode
+                )
+            )
+        if check_files and mode == "static-file":
+            path = capability.get("path")
+            if not path or not os.path.isfile(path):
+                fail(
+                    "Server stack '{}' requires fairness object {}. Create it before running.".format(
+                        server_name, path or "<missing path>"
+                    )
+                )
+            actual_bytes = os.path.getsize(path)
+            requested_bytes = int(workload["bytes"])
+            if actual_bytes < requested_bytes:
+                fail(
+                    "Server stack '{}' fairness object is too small: {} bytes at {}; need at least {}.".format(
+                        server_name, actual_bytes, path, requested_bytes
+                    )
+                )
+
+
 def get_required_stack_names(exp_conf):
     required = set(exp_conf.get("allowed_stack_names") or [])
     server_stack_name = exp_conf.get("fixed_parameters", {}).get("server_stack_name")
@@ -427,6 +501,7 @@ def get_required_stack_names(exp_conf):
 
 
 def validate_local_paths(stacks_conf, exp_conf):
+    validate_server_workload_capabilities(stacks_conf, exp_conf, check_files=True)
     required_stack_names = get_required_stack_names(exp_conf)
     for stack_name, stack_conf in stacks_conf.items():
         if stack_name not in required_stack_names:
@@ -701,7 +776,11 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
         "server_cmd": with_stack_run_root(
             server_stack,
             server_run_root,
-            lambda: " ".join(server_stack.run_server_cmd(port_no, flow_duration_s + 15)),
+            lambda: " ".join(
+                server_stack.run_server_cmd(
+                    port_no, flow_duration_s + 15, cc_algo=flow["cc_algo"]
+                )
+            ),
         ),
         "client_cmd": with_stack_run_root(
             client_stack,
@@ -927,13 +1006,9 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                 "server_binary": plan["server_binary_path"],
                 "server_binary_sha256": file_sha256(plan["server_binary_path"]),
                 "server_protocol": plan["protocol"],
-                "server_config": {
-                    "cc": plan["cc_algo"],
-                    "requested_cc": plan["cc_algo"],
-                    "icw": "not-configured",
-                    "pacing": "adapter-default",
-                    "gso": "adapter-default",
-                },
+                "server_config": stacks[
+                    plan["server_stack_name"]
+                ].get_server_runtime_config(plan["cc_algo"]),
                 "server_command": plan["server_cmd"],
                 "client_command": plan["client_cmd"],
                 "command": plan["client_cmd"],
@@ -1066,8 +1141,8 @@ def parse_trial(exp_conf_path, general_conf_path, profile_name, trial_name, tria
     subprocess.run(cmd, check=True)
 
 
-def cleanup_trial_artifacts(trial_dir, keep_pcap):
-    if keep_pcap:
+def cleanup_trial_artifacts(trial_dir, pcap_policy, run_idx):
+    if should_keep_artifact(pcap_policy, run_idx):
         return
     pcap_path = os.path.join(trial_dir, "packets.pcap")
     if os.path.exists(pcap_path):
@@ -1095,15 +1170,20 @@ def cleanup_run_results_dir(run_results_dir):
 
 
 def should_keep_qlogs(qlog_policy, run_idx):
-    if qlog_policy == "all":
+    return should_keep_artifact(qlog_policy, run_idx)
+
+
+def should_keep_artifact(policy, run_idx):
+    if policy == "all":
         return True
-    if qlog_policy == "first-only":
+    if policy == "first-only":
         return run_idx == 1
     return False
 
 
 def main():
     args = get_prog_args()
+    pcap_policy = resolve_pcap_policy(args)
     stacks_conf = load_json(args.stacks_conf)
     general_conf = load_json(args.general_conf)
     exp_conf = load_json(args.exp_conf)
@@ -1211,7 +1291,7 @@ def main():
                         run_results_dir,
                     )
                     if args.keep_run_artifacts:
-                        cleanup_trial_artifacts(run_results_dir, args.keep_pcap)
+                        cleanup_trial_artifacts(run_results_dir, pcap_policy, run_idx)
                         if not should_keep_qlogs(args.qlog_policy, run_idx):
                             cleanup_qlog_artifacts(run_results_dir)
                     else:

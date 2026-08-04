@@ -32,6 +32,9 @@ class Xquic(Stack):
         client_server_name=None,
         protocol="http3",
         default_port=None,
+        server_pacing=True,
+        server_gso="implementation-default",
+        workload_capabilities=None,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -52,6 +55,9 @@ class Xquic(Stack):
         self.client_server_name = client_server_name
         self.protocol = protocol
         self.default_port = default_port
+        self.server_pacing = bool(server_pacing)
+        self.server_gso = server_gso
+        self.workload_capabilities = workload_capabilities or {}
         self.run_root = None
         self.qlog_enabled = False
 
@@ -82,12 +88,14 @@ class Xquic(Stack):
             "-p",
             shlex.quote(str(port_no)),
             "-c",
-            "b",
+            shlex.quote(self._map_cc_algo(cc_algo)),
             "-r",
             "index.txt",
             "-o",
             "xquic-server.slog",
         ]
+        if self.server_pacing:
+            server_cmd.append("-C")
 
         parts.append(
             "timeout {} {}".format(int(duration_s), " ".join(server_cmd))
@@ -109,6 +117,16 @@ class Xquic(Stack):
             "-lc",
             shell_cmd,
         ]
+
+    def get_server_runtime_config(self, cc_algo):
+        return {
+            "cc": cc_algo,
+            "requested_cc": cc_algo,
+            "icw": "implementation-default",
+            "pacing": "enabled" if self.server_pacing else "disabled",
+            "gso": self.server_gso,
+            "control_source": "server-command-line",
+        }
 
     def run_client_cmd(self, port_no, duration_s, cc_algo=None):
         root_dir = self._get_root_dir(self.client_path)
