@@ -1,0 +1,167 @@
+{
+    "experiment_name": "P0-policy-fairness",
+    "description": "Two synchronized quic-go clients using implementation-derived Neqo and Chromium ACK policies against one shared server process.",
+    "experiment_results_dir": "/home/ioio33/QUIC_project/results/P0-policy-fairness",
+    "num_trials": 10,
+    "flow_duration_s": 60,
+    "throughput_window_s": 0.5,
+    "steady_state_window_s": {
+        "start": 10,
+        "end": 50
+    },
+    "large_test_object": "/1GB.bin",
+    "enable_qlog": false,
+    "allowed_stack_names": [
+        "quic-go-policy"
+    ],
+    "fixed_parameters": {
+        "stack_family": "quic-go-server",
+        "server_stack_name": "quic-go",
+        "runtime_model": "duration-limited saturated downloads over two synchronized connections to one server process",
+        "same_bottleneck_bandwidth_mbps": 20,
+        "same_cc_algo": "cubic",
+        "same_file": "/1GB.bin",
+        "same_runtime_seconds": 60,
+        "same_flow_count": 2,
+        "only_variable": "receiver ACK generation policy"
+    },
+    "default_network_profile": "50rtt-20bw-1.0bdp",
+    "netem_conf": {
+        "RTT_ms": 50,
+        "bandwidth_Mbps": 20,
+        "buffer_bdp": 1.0,
+        "reverse_bottleneck": false
+    },
+    "network_profiles": [
+        {
+            "name": "10rtt-20bw-0.5bdp",
+            "netem_conf": {
+                "RTT_ms": 10,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 0.5,
+                "reverse_bottleneck": false
+            }
+        },
+        {
+            "name": "10rtt-20bw-1.0bdp",
+            "netem_conf": {
+                "RTT_ms": 10,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 1.0,
+                "reverse_bottleneck": false
+            }
+        },
+        {
+            "name": "50rtt-20bw-0.5bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 0.5,
+                "reverse_bottleneck": false
+            }
+        },
+        {
+            "name": "50rtt-20bw-1.0bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 1.0,
+                "reverse_bottleneck": false
+            }
+        }
+    ],
+    "trials": [
+        {
+            "name": "P1_neqo_vs_chromium",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "neqo",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "chromium",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "test"
+                }
+            ]
+        },
+        {
+            "name": "P2_chromium_vs_neqo",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "chromium",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "neqo",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "test"
+                }
+            ]
+        },
+        {
+            "name": "P3_neqo_vs_neqo",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "neqo",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "neqo",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "P4_chromium_vs_chromium",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "chromium",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "chromium",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        }
+    ]
+}

@@ -5,11 +5,10 @@ import subprocess
 from stacks.stack import Stack
 
 
-class Quiche(Stack):
-    NAME = "quiche"
+class Xquic(Stack):
+    NAME = "xquic"
     CUBIC = "cubic"
     RENO = "reno"
-    INITIAL_RTT_MS = 50
 
     def __init__(
         self,
@@ -71,29 +70,24 @@ class Quiche(Stack):
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "qlogs", "server"))),
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "logs"))),
         ]
-        if self.qlog_enabled:
-            parts.append("export QLOGDIR={}".format(shlex.quote(os.path.join(run_dir, "qlogs", "server"))))
-        parts.append("export RUST_LOG=info")
 
         server_cmd = [
             shlex.quote(self.server_path),
-            "--cert",
-            shlex.quote(self.server_cert_path),
-            "--key",
-            shlex.quote(self.server_key_path),
-            "--listen",
-            shlex.quote(server_addr),
-            "--http-version",
-            "HTTP/3",
-            "--no-retry",
+            "-a",
+            shlex.quote(self.server_ip),
+            "-p",
+            shlex.quote(str(port_no)),
+            "-c",
+            "b",
+            "-r",
+            "index.txt",
+            "-o",
+            "xquic-server.slog",
         ]
-        if self.server_root:
-            server_cmd.extend(["--root", shlex.quote(self.server_root)])
-            server_cmd.extend(["--index", shlex.quote(os.path.basename(self._get_client_url(port_no).split("/")[-1] or "index.txt"))])
 
         parts.append(
             "timeout {} {}".format(int(duration_s), " ".join(server_cmd))
-            + " >{} 2>{}".format(
+            + " >{} 2>{} </dev/null".format(
                 shlex.quote(os.path.join(run_dir, "logs", "server.stdout.log")),
                 shlex.quote(os.path.join(run_dir, "logs", "server.stderr.log")),
             )
@@ -125,29 +119,44 @@ class Quiche(Stack):
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "stdout"))),
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "logs"))),
         ]
-        if self.qlog_enabled:
-            parts.append("export QLOGDIR={}".format(shlex.quote(os.path.join(run_dir, "qlogs", "client"))))
 
         client_cmd = [
             shlex.quote(self.client_path),
-            "--no-verify",
-            "--cc-algorithm",
-            shlex.quote(cc_algo),
-            "--disable-gso",
-            "--initial-rtt",
-            shlex.quote(str(self.INITIAL_RTT_MS)),
-            "--dump-responses",
-            shlex.quote(os.path.join(run_dir, "stdout")),
+            "-a",
+            shlex.quote(self.server_ip),
+            "-p",
+            shlex.quote(str(port_no)),
+            "-U",
             shlex.quote(client_url),
+            "-A",
+            "h3",
+            "-c",
+            shlex.quote(self._map_cc_algo(cc_algo)),
+            "-t",
+            shlex.quote(str(self._get_client_timeout_seconds(duration_s))),
+            "-D",
+            shlex.quote(os.path.join(run_dir, "stdout")),
         ]
+        if self.qlog_enabled:
+            client_cmd.extend(
+                [
+                    "-C",
+                    "-L",
+                    shlex.quote(os.path.join(run_dir, "qlogs", "client")),
+                ]
+            )
 
         parts.append(
-            "timeout {} {}".format(shlex.quote(client_timeout), " ".join(client_cmd))
+            "timeout {} {}".format(
+                shlex.quote(client_timeout),
+                " ".join(client_cmd),
+            )
             + " >{} 2>{} </dev/null".format(
                 shlex.quote(os.path.join(run_dir, "logs", "client.stdout.log")),
                 shlex.quote(os.path.join(run_dir, "logs", "client.stderr.log")),
             )
         )
+        parts.append(self._build_client_output_normalize_cmd(run_dir))
 
         shell_cmd = " && ".join(parts)
         return " ".join(
@@ -215,6 +224,40 @@ class Quiche(Stack):
             target["server_name"] = self.client_server_name
         return target
 
+    def _get_client_timeout_seconds(self, duration_s):
+        timeout_value = self._get_client_timeout(duration_s)
+        if isinstance(timeout_value, int):
+            return timeout_value
+        if isinstance(timeout_value, str) and timeout_value.endswith("s"):
+            return int(timeout_value[:-1])
+        return int(timeout_value)
+
+    def _map_cc_algo(self, cc_algo):
+        mapping = {
+            self.CUBIC: "c",
+            self.RENO: "r",
+            "bbr": "b",
+            "copa": "P",
+        }
+        return mapping.get(cc_algo, "c")
+
+    def _build_client_output_normalize_cmd(self, run_dir):
+        output_dir = os.path.join(run_dir, "stdout")
+        canonical_output = os.path.join(output_dir, "client.body.bin")
+        return (
+            "if [ ! -f {canonical} ]; then "
+            "for candidate in {output_dir}/*; do "
+            "if [ -f \"$candidate\" ] && [ \"$candidate\" != {canonical} ]; then "
+            "cp \"$candidate\" {canonical}; "
+            "break; "
+            "fi; "
+            "done; "
+            "fi"
+        ).format(
+            canonical=shlex.quote(canonical_output),
+            output_dir=shlex.quote(output_dir),
+        )
+
     @staticmethod
     def get_cc_algos():
-        return [Quiche.CUBIC, Quiche.RENO]
+        return [Xquic.CUBIC, Xquic.RENO]

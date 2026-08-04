@@ -1,0 +1,168 @@
+{
+    "experiment_name": "B0-two-flow-fairness-no-jitter",
+    "description": "Minimal 2-flow shared-bottleneck fairness experiment with two quic-go clients competing through two independent server processes.",
+    "experiment_results_dir": "/home/ioio33/QUIC_project/results/B0-two-flow-fairness-no-jitter",
+    "num_trials": 1,
+    "flow_duration_s": 60,
+    "throughput_window_s": 0.5,
+    "large_test_object": "/1GB.bin",
+    "allowed_stack_names": [
+        "quic-go-ack2",
+        "quic-go-ack10"
+    ],
+    "fixed_parameters": {
+        "stack_family": "quic-go-server",
+        "server_stack_name": "quic-go",
+        "runtime_model": "duration-limited saturated download to two independent server processes",
+        "same_rtt_ms": 50,
+        "same_bottleneck_bandwidth_mbps": 20,
+        "same_buffer_bdp": 1,
+        "same_cc_algo": "cubic",
+        "same_file": "/1GB.bin",
+        "same_runtime_seconds": 60,
+        "same_flow_count": 2,
+        "only_variable": "ACK frequency variant"
+    },
+    "default_network_profile": "50rtt-20bw-1.0bdp",
+    "netem_conf": {
+        "RTT_ms": 50,
+        "bandwidth_Mbps": 20,
+        "buffer_bdp": 1
+    },
+    "network_profiles": [
+        {
+            "name": "50rtt-20bw-1.0bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 1.0
+            }
+        },
+        {
+            "name": "50rtt-20bw-3.0bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 3.0
+            }
+        },
+        {
+            "name": "50rtt-20bw-0.5bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 0.5
+            }
+        },
+        {
+            "name": "10rtt-20bw-1.0bdp",
+            "netem_conf": {
+                "RTT_ms": 10,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 1.0
+            }
+        },
+        {
+            "name": "10rtt-20bw-0.5bdp",
+            "netem_conf": {
+                "RTT_ms": 10,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 0.5
+            }
+        },
+        {
+            "name": "10rtt-20bw-3.0bdp",
+            "netem_conf": {
+                "RTT_ms": 10,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 3.0
+            }
+        }
+    ],
+    "trials": [
+        {
+            "name": "E1_ack2_vs_ack10",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-ack2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "ack_freq": 2,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-ack10",
+                    "cc_algo": "cubic",
+                    "port_no": "4434",
+                    "ack_freq": 10,
+                    "role": "test"
+                }
+            ]
+        },
+        {
+            "name": "E2_ack10_vs_ack2",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-ack10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "ack_freq": 10,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-ack2",
+                    "cc_algo": "cubic",
+                    "port_no": "4434",
+                    "ack_freq": 2,
+                    "role": "test"
+                }
+            ]
+        },
+        {
+            "name": "E3_ack10_vs_ack10",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-ack10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "ack_freq": 10,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-ack10",
+                    "cc_algo": "cubic",
+                    "port_no": "4434",
+                    "ack_freq": 10,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "E4_ack2_vs_ack2",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-ack2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "ack_freq": 2,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-ack2",
+                    "cc_algo": "cubic",
+                    "port_no": "4434",
+                    "ack_freq": 2,
+                    "role": "baseline"
+                }
+            ]
+        }
+    ]
+}

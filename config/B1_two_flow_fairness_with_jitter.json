@@ -1,0 +1,93 @@
+{
+    "experiment_name": "B1-two-flow-fairness-with-jitter",
+    "description": "Two-flow shared-bottleneck fairness experiment with quic-go ACK variants under added path jitter.",
+    "experiment_results_dir": "/home/ioio33/QUIC_project/results/B1-two-flow-fairness-with-jitter",
+    "num_trials": 10,
+    "flow_duration_s": 60,
+    "throughput_window_s": 0.5,
+    "large_test_object": "/1GB.bin",
+    "allowed_stack_names": [
+        "quic-go-ack2",
+        "quic-go-ack5",
+        "quic-go-ack10"
+    ],
+    "fixed_parameters": {
+        "stack_family": "quic-go-server",
+        "server_stack_name": "quic-go",
+        "runtime_model": "duration-limited shared-bottleneck fairness with delay jitter",
+        "same_rtt_ms": 50,
+        "same_jitter_ms": 0,
+        "same_bottleneck_bandwidth_mbps": 10,
+        "same_buffer_bdp": 0.5,
+        "same_cc_algo": "cubic",
+        "same_file": "/1GB.bin",
+        "same_runtime_seconds": 60,
+        "same_flow_count": 2,
+        "only_variable": "ACK frequency variant under jitter"
+    },
+    "default_network_profile": "50rtt-10bw-0.5bdp-jitter0ms",
+    "netem_conf": {
+        "RTT_ms": 50,
+        "jitter_ms": 0,
+        "reverse_jitter_ms": 0,
+        "reverse_bottleneck": false,
+        "bandwidth_Mbps": 10,
+        "buffer_bdp": 0.5
+    },
+    "network_profiles": [
+        { "name": "50rtt-10bw-0.5bdp-jitter0ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 0,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-10bw-0.5bdp-jitter1ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 1,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-10bw-0.5bdp-jitter5ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 5,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-10bw-0.5bdp-jitter10ms", "netem_conf": { "RTT_ms": 50, "jitter_ms": 10, "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-10bw-1.0bdp-jitter0ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 0,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-10bw-1.0bdp-jitter1ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 1,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-10bw-1.0bdp-jitter5ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 5,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-10bw-1.0bdp-jitter10ms", "netem_conf": { "RTT_ms": 50, "jitter_ms": 10, "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-10bw-2.0bdp-jitter0ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 0,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-10bw-2.0bdp-jitter1ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 1,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-10bw-2.0bdp-jitter5ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 5,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-10bw-2.0bdp-jitter10ms", "netem_conf": { "RTT_ms": 50, "jitter_ms": 10, "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 10, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-20bw-0.5bdp-jitter0ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 0,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-20bw-0.5bdp-jitter1ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 1,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-20bw-0.5bdp-jitter5ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 5,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-20bw-0.5bdp-jitter10ms", "netem_conf": { "RTT_ms": 50, "jitter_ms": 10, "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 0.5 } },
+        { "name": "50rtt-20bw-1.0bdp-jitter0ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 0,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-20bw-1.0bdp-jitter1ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 1,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-20bw-1.0bdp-jitter5ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 5,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-20bw-1.0bdp-jitter10ms", "netem_conf": { "RTT_ms": 50, "jitter_ms": 10, "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 1.0 } },
+        { "name": "50rtt-20bw-2.0bdp-jitter0ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 0,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-20bw-2.0bdp-jitter1ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 1,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-20bw-2.0bdp-jitter5ms",  "netem_conf": { "RTT_ms": 50, "jitter_ms": 5,  "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 2.0 } },
+        { "name": "50rtt-20bw-2.0bdp-jitter10ms", "netem_conf": { "RTT_ms": 50, "jitter_ms": 10, "reverse_jitter_ms": 0, "reverse_bottleneck": false, "bandwidth_Mbps": 20, "buffer_bdp": 2.0 } }
+    ],
+    "trials": [
+        {
+            "name": "E1_ack10_vs_ack2",
+            "flows": [
+                { "flow_id": "flow_a", "stack_name": "quic-go-ack10", "cc_algo": "cubic", "port_no": "4433", "ack_freq": 10, "role": "test" },
+                { "flow_id": "flow_b", "stack_name": "quic-go-ack2", "cc_algo": "cubic", "port_no": "4434", "ack_freq": 2, "role": "test" }
+            ]
+        },
+        {
+            "name": "E2_ack2_vs_ack10",
+            "flows": [
+                { "flow_id": "flow_a", "stack_name": "quic-go-ack2", "cc_algo": "cubic", "port_no": "4433", "ack_freq": 2, "role": "test" },
+                { "flow_id": "flow_b", "stack_name": "quic-go-ack10", "cc_algo": "cubic", "port_no": "4434", "ack_freq": 10, "role": "test" }
+            ]
+        },
+        {
+            "name": "E3_ack10_vs_ack10",
+            "flows": [
+                { "flow_id": "flow_a", "stack_name": "quic-go-ack10", "cc_algo": "cubic", "port_no": "4433", "ack_freq": 10, "role": "baseline" },
+                { "flow_id": "flow_b", "stack_name": "quic-go-ack10", "cc_algo": "cubic", "port_no": "4434", "ack_freq": 10, "role": "baseline" }
+            ]
+        },
+        {
+            "name": "E4_ack2_vs_ack2",
+            "flows": [
+                { "flow_id": "flow_a", "stack_name": "quic-go-ack2", "cc_algo": "cubic", "port_no": "4433", "ack_freq": 2, "role": "baseline" },
+                { "flow_id": "flow_b", "stack_name": "quic-go-ack2", "cc_algo": "cubic", "port_no": "4434", "ack_freq": 2, "role": "baseline" }
+            ]
+        }
+    ]
+}

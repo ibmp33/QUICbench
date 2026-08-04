@@ -1,48 +1,111 @@
 import subprocess
 from operator import itemgetter
-from utils.remote_cmd import get_remote_cmd_sudo
 
 # for introducing delay for ingress packets
+def run_local_sudo(cmd):
+    subprocess.run(["sudo", "bash", "-lc", cmd], check=True)
+
+
+def disable_interface_offloads(interface):
+    # Turn off segmentation/aggregation features so tc sees packet timing
+    # closer to what the transport stack actually emits.
+    cmd = (
+        "ethtool -K {interface} rx on tx on 2>/dev/null || true;"
+        "ethtool -K {interface} gro off gso off tso off 2>/dev/null || true;"
+        "ethtool -K {interface} ufo off lro off 2>/dev/null || true;"
+        "ethtool -K {interface} tx-udp-segmentation off 2>/dev/null || true"
+    ).format(interface=interface)
+    run_local_sudo(cmd)
+
+
+def ensure_ifb_interface(ingress_interface):
+    cmd = (
+        "set -e;"
+        "modprobe ifb;"
+        "ip link show dev {ingress_interface} >/dev/null 2>&1 || ip link add {ingress_interface} type ifb;"
+        "ip link set dev {ingress_interface} up"
+    ).format(ingress_interface=ingress_interface)
+    run_local_sudo(cmd)
+
+
 def add_ingress_interface(server_hostname, server_pw_path, interface, ingress_interface):
     cmd = (
-        "sudo modprobe ifb;"
-        "sudo ip link set dev {ingress_interface} up;"
-        "sudo tc qdisc add dev {interface} ingress;"
-        "sudo tc filter add dev {interface} parent ffff: protocol ip u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev {ingress_interface};"
+        "set -e;"
+        "tc qdisc add dev {interface} ingress;"
+        "tc filter add dev {interface} parent ffff: protocol ip u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev {ingress_interface}"
     ).format(interface=interface, ingress_interface=ingress_interface)
-    subprocess.run(get_remote_cmd_sudo(server_hostname, server_pw_path, cmd), shell=True)
+    run_local_sudo(cmd)
+    disable_interface_offloads(interface)
+    disable_interface_offloads(ingress_interface)
 
 # for capturing packets before qdisc egress to measure queuing delay/packets dropped by buffer
 def add_virtual_interface(server_hostname, server_pw_path, server_ip, interface, virtual_interface):
     cmd = (
-        "sudo brctl addbr {virtual_interface};"
-        "sudo brctl addif {virtual_interface} {interface};"
-        "sudo ip link set dev {virtual_interface} up;"
-        "sudo ip addr add dev {virtual_interface} {server_ip}/8;"
-        "sudo ip addr flush dev {interface};"
+        "brctl addbr {virtual_interface};"
+        "brctl addif {virtual_interface} {interface};"
+        "ip link set dev {virtual_interface} up;"
+        "ip addr add dev {virtual_interface} {server_ip}/8;"
+        "ip addr flush dev {interface};"
     ).format(interface=interface, virtual_interface=virtual_interface, server_ip=server_ip)
-    subprocess.run(get_remote_cmd_sudo(server_hostname, server_pw_path, cmd), shell=True)
+    run_local_sudo(cmd)
 
 def set_netem(server_hostname, server_pw_path, server_ip, interface, ingress_interface, netem_conf, virtual_interface=None):
     print("Setting network emulation:")
-    subprocess.run(get_remote_cmd_sudo(server_hostname, server_pw_path, "sudo tc qdisc del dev {} root".format(interface)), shell=True)
+    # Clear any previous shaping/filter state so repeated runs don't stack
+    # duplicate ingress redirects or leave an old ifb root qdisc behind.
+    subprocess.run(["sudo", "tc", "qdisc", "del", "dev", interface, "root"], stderr=subprocess.DEVNULL)
+    subprocess.run(["sudo", "tc", "qdisc", "del", "dev", interface, "handle", "ffff:", "ingress"], stderr=subprocess.DEVNULL)
+    subprocess.run(["sudo", "tc", "qdisc", "del", "dev", ingress_interface, "root"], stderr=subprocess.DEVNULL)
 
     RTT_ms, bandwidth_Mbps, buffer_bdp = itemgetter("RTT_ms", "bandwidth_Mbps", "buffer_bdp")(netem_conf)
+    jitter_ms = float(netem_conf.get("jitter_ms", 0))
+    reverse_jitter_ms = float(netem_conf.get("reverse_jitter_ms", jitter_ms))
+    reverse_bottleneck = bool(netem_conf.get("reverse_bottleneck", True))
 
     if virtual_interface:
         add_virtual_interface(server_hostname, server_pw_path, server_ip, interface, virtual_interface)
 
+    ensure_ifb_interface(ingress_interface)
     add_ingress_interface(server_hostname, server_pw_path, interface, ingress_interface)
 
     delay_ms = RTT_ms // 2
+    jitter_one_way_ms = jitter_ms / 2.0
+    reverse_jitter_one_way_ms = reverse_jitter_ms / 2.0
     buffer_bytes = int(RTT_ms * bandwidth_Mbps * 1000 / 8 * buffer_bdp)
     bandwidth_Kbps = bandwidth_Mbps * 1000
     burst_bytes = int(bandwidth_Mbps * 1000000 / 250 / 8) # https://unix.stackexchange.com/questions/100785/bucket-size-in-tbf
+    forward_delay_clause = "delay {}ms".format(delay_ms)
+    if jitter_one_way_ms > 0:
+        forward_delay_clause = "delay {}ms {}ms distribution normal".format(delay_ms, jitter_one_way_ms)
+    reverse_delay_clause = "delay {}ms".format(delay_ms)
+    if reverse_jitter_one_way_ms > 0:
+        reverse_delay_clause = "delay {}ms {}ms distribution normal".format(delay_ms, reverse_jitter_one_way_ms)
+
+    reverse_qdisc_cmd = "tc qdisc add dev {interface} root handle 1:0 netem {reverse_delay_clause} limit 12500;".format(
+        interface=interface, reverse_delay_clause=reverse_delay_clause
+    )
+    if reverse_bottleneck:
+        reverse_qdisc_cmd += "tc qdisc add dev {interface} parent 1:1 handle 10: tbf rate {bandwidth_Kbps}kbit limit {buffer_bytes} burst {burst_bytes};".format(
+            interface=interface,
+            bandwidth_Kbps=bandwidth_Kbps,
+            buffer_bytes=buffer_bytes,
+            burst_bytes=burst_bytes,
+        )
+
     cmd = (
-        "sudo tc qdisc add dev {interface} root handle 1:0 netem delay {delay_ms}ms limit 12500;"
-        "sudo tc qdisc add dev {interface} parent 1:1 handle 10: tbf rate {bandwidth_Kbps}kbit limit {buffer_bytes} burst {burst_bytes};"
-        "sudo tc qdisc add dev {ingress_interface} root netem delay {delay_ms}ms;"
-        "sudo tc qdisc show dev {interface} && sudo tc qdisc show dev {ingress_interface}"
-    ).format(interface=interface, ingress_interface=ingress_interface,
-        delay_ms=delay_ms, bandwidth_Kbps=bandwidth_Kbps, buffer_bytes=buffer_bytes, burst_bytes=burst_bytes)
-    subprocess.run(get_remote_cmd_sudo(server_hostname, server_pw_path, cmd), shell=True)
+        "set -e;"
+        "{reverse_qdisc_cmd}"
+        "tc qdisc add dev {ingress_interface} root handle 2:0 netem {forward_delay_clause} limit 12500;"
+        "tc qdisc add dev {ingress_interface} parent 2:1 handle 20: tbf rate {bandwidth_Kbps}kbit limit {buffer_bytes} burst {burst_bytes};"
+        "ip link show dev {ingress_interface};"
+        "tc qdisc show dev {interface} && tc qdisc show dev {ingress_interface}"
+    ).format(
+        reverse_qdisc_cmd=reverse_qdisc_cmd,
+        interface=interface,
+        ingress_interface=ingress_interface,
+        forward_delay_clause=forward_delay_clause,
+        bandwidth_Kbps=bandwidth_Kbps,
+        buffer_bytes=buffer_bytes,
+        burst_bytes=burst_bytes,
+    )
+    run_local_sudo(cmd)

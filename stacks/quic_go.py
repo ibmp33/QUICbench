@@ -5,11 +5,12 @@ import subprocess
 from stacks.stack import Stack
 
 
-class Quiche(Stack):
-    NAME = "quiche"
+class QuicGo(Stack):
+    NAME = "quic-go"
     CUBIC = "cubic"
-    RENO = "reno"
-    INITIAL_RTT_MS = 50
+    ACK_POLICY = None
+    SUPPORTS_EXPERIMENT_FLAGS = False
+    ACK_POLICIES = {"fixed2", "fixed10", "neqo", "chromium"}
 
     def __init__(
         self,
@@ -53,46 +54,59 @@ class Quiche(Stack):
         self.qlog_enabled = False
 
     def run_remote_server(self, port_no, cc_algo, duration_s):
-        cmd = self.run_server_cmd(port_no, duration_s, cc_algo=cc_algo)
+        cmd = self.run_server_cmd(port_no, duration_s)
         return subprocess.Popen(cmd)
 
-    def run_client(self, port_no, cc_algo, duration_s):
-        cmd = self.run_client_cmd(port_no, duration_s, cc_algo=cc_algo)
+    def run_client(
+        self,
+        port_no,
+        cc_algo,
+        duration_s,
+        start_at_unix_ns=None,
+        local_port=None,
+        ack_policy=None,
+        target=None,
+    ):
+        cmd = self.run_client_cmd(
+            port_no,
+            duration_s,
+            start_at_unix_ns=start_at_unix_ns,
+            local_port=local_port,
+            ack_policy=ack_policy,
+            target=target,
+        )
         return subprocess.Popen(cmd, shell=True)
 
-    def run_server_cmd(self, port_no, duration_s, cc_algo=None):
+    def run_server_cmd(self, port_no, duration_s):
         root_dir = self._get_root_dir(self.server_path)
         run_dir = self._get_run_dir(port_no)
         server_addr = self._get_server_addr(port_no)
-        cc_algo = cc_algo or self.CUBIC
 
         parts = [
             "cd {}".format(shlex.quote(root_dir)),
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "qlogs", "server"))),
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "logs"))),
         ]
-        if self.qlog_enabled:
-            parts.append("export QLOGDIR={}".format(shlex.quote(os.path.join(run_dir, "qlogs", "server"))))
-        parts.append("export RUST_LOG=info")
 
         server_cmd = [
             shlex.quote(self.server_path),
-            "--cert",
-            shlex.quote(self.server_cert_path),
-            "--key",
-            shlex.quote(self.server_key_path),
-            "--listen",
+            "-addr",
             shlex.quote(server_addr),
-            "--http-version",
-            "HTTP/3",
-            "--no-retry",
+            "-cert",
+            shlex.quote(self.server_cert_path),
+            "-key",
+            shlex.quote(self.server_key_path),
         ]
         if self.server_root:
-            server_cmd.extend(["--root", shlex.quote(self.server_root)])
-            server_cmd.extend(["--index", shlex.quote(os.path.basename(self._get_client_url(port_no).split("/")[-1] or "index.txt"))])
+            server_cmd.extend(["-root", shlex.quote(self.server_root)])
+        if self.qlog_enabled:
+            server_cmd.extend(["-qlog-dir", shlex.quote(os.path.join(run_dir, "qlogs", "server"))])
 
         parts.append(
-            "timeout {} {}".format(int(duration_s), " ".join(server_cmd))
+            "timeout {} {}".format(
+                int(duration_s),
+                " ".join(server_cmd),
+            )
             + " >{} 2>{}".format(
                 shlex.quote(os.path.join(run_dir, "logs", "server.stdout.log")),
                 shlex.quote(os.path.join(run_dir, "logs", "server.stderr.log")),
@@ -112,12 +126,19 @@ class Quiche(Stack):
             shell_cmd,
         ]
 
-    def run_client_cmd(self, port_no, duration_s, cc_algo=None):
+    def run_client_cmd(
+        self,
+        port_no,
+        duration_s,
+        start_at_unix_ns=None,
+        local_port=None,
+        ack_policy=None,
+        target=None,
+    ):
         root_dir = self._get_root_dir(self.client_path)
         run_dir = self._get_run_dir(port_no)
-        client_url = self._get_client_url(port_no)
+        target = target or self.get_client_target(port_no)
         client_timeout = self._get_client_timeout(duration_s)
-        cc_algo = cc_algo or self.CUBIC
 
         parts = [
             "cd {}".format(shlex.quote(root_dir)),
@@ -125,24 +146,60 @@ class Quiche(Stack):
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "stdout"))),
             "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "logs"))),
         ]
-        if self.qlog_enabled:
-            parts.append("export QLOGDIR={}".format(shlex.quote(os.path.join(run_dir, "qlogs", "client"))))
 
         client_cmd = [
             shlex.quote(self.client_path),
-            "--no-verify",
-            "--cc-algorithm",
-            shlex.quote(cc_algo),
-            "--disable-gso",
-            "--initial-rtt",
-            shlex.quote(str(self.INITIAL_RTT_MS)),
-            "--dump-responses",
-            shlex.quote(os.path.join(run_dir, "stdout")),
-            shlex.quote(client_url),
+            "-protocol",
+            shlex.quote(target["protocol"]),
         ]
-
+        if target["protocol"] == "http3":
+            client_cmd.extend(["-url", shlex.quote(target["url"]), "-insecure"])
+            if target.get("server_name"):
+                client_cmd.extend(["-server-name", shlex.quote(target["server_name"])])
+        elif target["protocol"] == "raw":
+            client_cmd.extend(["-addr", shlex.quote(target["addr"])])
+        else:
+            raise ValueError("unsupported client protocol {!r}".format(target["protocol"]))
+        if self.SUPPORTS_EXPERIMENT_FLAGS:
+            effective_ack_policy = ack_policy or self.ACK_POLICY
+            if effective_ack_policy not in self.ACK_POLICIES:
+                raise ValueError(
+                    "unsupported ACK policy {!r}; valid values: {}".format(
+                        effective_ack_policy, ", ".join(sorted(self.ACK_POLICIES))
+                    )
+                )
+            client_cmd.extend(
+                [
+                    "-duration",
+                    shlex.quote(client_timeout),
+                    "-ack-policy",
+                    shlex.quote(effective_ack_policy),
+                    "-metrics",
+                    shlex.quote(os.path.join(run_dir, "metrics.csv")),
+                ]
+            )
+            if local_port is not None:
+                client_cmd.extend(["-local-port", shlex.quote(str(local_port))])
+            if start_at_unix_ns is not None:
+                client_cmd.extend(["-start-at-unix-ns", shlex.quote(str(start_at_unix_ns))])
+        else:
+            client_cmd.extend(
+                [
+                    "-timeout",
+                    shlex.quote(client_timeout),
+                    "-o",
+                    shlex.quote(os.path.join(run_dir, "stdout", "client.body.bin")),
+                ]
+            )
+        if self.qlog_enabled:
+            client_cmd.extend(
+                [
+                    "-qlog-dir",
+                    shlex.quote(os.path.join(run_dir, "qlogs", "client")),
+                ]
+            )
         parts.append(
-            "timeout {} {}".format(shlex.quote(client_timeout), " ".join(client_cmd))
+            "exec {}".format(" ".join(client_cmd))
             + " >{} 2>{} </dev/null".format(
                 shlex.quote(os.path.join(run_dir, "logs", "client.stdout.log")),
                 shlex.quote(os.path.join(run_dir, "logs", "client.stderr.log")),
@@ -189,6 +246,7 @@ class Quiche(Stack):
             "server_stderr_log": os.path.join(run_dir, "logs", "server.stderr.log"),
             "client_stdout_log": os.path.join(run_dir, "logs", "client.stdout.log"),
             "client_stderr_log": os.path.join(run_dir, "logs", "client.stderr.log"),
+            "client_metrics_path": os.path.join(run_dir, "metrics.csv"),
         }
 
     def _get_server_addr(self, port_no):
@@ -201,20 +259,51 @@ class Quiche(Stack):
             return self.client_url_template.format(port=port_no, server_ip=self.server_ip)
         return "https://{}:{}/".format(self.server_ip, port_no)
 
+    def get_client_target(self, port_no=None):
+        port_no = str(port_no or self.default_port)
+        if not port_no or port_no == "None":
+            raise ValueError("no port supplied for stack '{}'".format(self.NAME))
+        if self.protocol == "http3":
+            target = {"protocol": "http3", "url": self._get_client_url(port_no)}
+            if self.client_server_name:
+                target["server_name"] = self.client_server_name
+            return target
+        if self.protocol == "raw":
+            template = self.client_addr_template or "{server_ip}:{port}"
+            return {
+                "protocol": "raw",
+                "addr": template.format(server_ip=self.server_ip, port=port_no),
+            }
+        raise ValueError("unsupported protocol {!r} for stack '{}'".format(self.protocol, self.NAME))
+
     def _get_client_timeout(self, duration_s):
         if self.client_timeout:
             return self.client_timeout
         return "{}s".format(int(duration_s))
 
-    def get_client_target(self, port_no=None):
-        port_no = str(port_no or self.default_port)
-        if not port_no or port_no == "None":
-            raise ValueError("no port supplied for stack '{}'".format(self.NAME))
-        target = {"protocol": self.protocol, "url": self._get_client_url(port_no)}
-        if self.client_server_name:
-            target["server_name"] = self.client_server_name
-        return target
-
     @staticmethod
     def get_cc_algos():
-        return [Quiche.CUBIC, Quiche.RENO]
+        return [QuicGo.CUBIC]
+
+
+class QuicGoAck5(QuicGo):
+    NAME = "quic-go-ack5"
+    ACK_POLICY = "fixed5"
+    SUPPORTS_EXPERIMENT_FLAGS = True
+
+
+class QuicGoAck2(QuicGo):
+    NAME = "quic-go-ack2"
+    ACK_POLICY = "fixed2"
+    SUPPORTS_EXPERIMENT_FLAGS = True
+
+
+class QuicGoAck10(QuicGo):
+    NAME = "quic-go-ack10"
+    ACK_POLICY = "fixed10"
+    SUPPORTS_EXPERIMENT_FLAGS = True
+
+
+class QuicGoPolicy(QuicGo):
+    NAME = "quic-go-policy"
+    SUPPORTS_EXPERIMENT_FLAGS = True
