@@ -3,9 +3,9 @@
     "description": "Minimal 2-flow shared-bottleneck fairness experiment with two quic-go clients competing through two independent server processes.",
     "experiment_results_dir": "/home/ioio33/QUIC_project/results/B0-two-flow-fairness-no-jitter",
     "num_trials": 1,
-    "flow_duration_s": 60,
+    "workload_name": "fairness",
+    "topology_mode": "same-implementation-different-ports-control",
     "throughput_window_s": 0.5,
-    "large_test_object": "/1GB.bin",
     "allowed_stack_names": [
         "quic-go-ack2",
         "quic-go-ack10"

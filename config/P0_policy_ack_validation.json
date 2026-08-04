@@ -3,6 +3,7 @@
     "description": "Small qlog-enabled validation run for checking the realized ACK behavior before the main policy fairness campaign.",
     "experiment_results_dir": "/home/ioio33/QUIC_project/results/P0-policy-ack-validation",
     "num_trials": 3,
+    "topology_mode": "shared-server-shared-port",
     "flow_duration_s": 30,
     "throughput_window_s": 0.5,
     "steady_state_window_s": {

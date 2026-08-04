@@ -15,6 +15,7 @@ from stacks.mvfst import Mvfst
 from stacks.quiche import Quiche
 from stacks.quic_go import QuicGo, QuicGoPolicy
 from stacks.xquic import Xquic
+from workloads import generated_target, load_workload_profiles, resolve_workload
 
 
 SERVER_CLASSES = {
@@ -37,8 +38,14 @@ def parse_args():
     )
     parser.add_argument("--stacks-conf", default="./config/stacks_conf_default.json")
     parser.add_argument("--general-conf", default="./config/general_conf_default.json")
+    parser.add_argument("--workloads-conf", default="./config/workloads_conf_default.json")
+    parser.add_argument("--workload", choices=["smoke", "fairness"], default="smoke")
     parser.add_argument("--port", type=int, help="override the adapter's verified default port")
-    parser.add_argument("--duration", type=int, default=30)
+    parser.add_argument(
+        "--duration",
+        type=int,
+        help="deprecated runtime override; normally use the workload profile duration_s",
+    )
     parser.add_argument("--local-port", type=int)
     parser.add_argument(
         "--output",
@@ -81,7 +88,7 @@ def refresh_client_command(args, run, scheduled_start):
     run["client_command_text"] = command_text(run["client_command"])
 
 
-def build_run(args, stacks_conf, general_conf):
+def build_run(args, stacks_conf, general_conf, workload):
     server_conf = stacks_conf[args.server]
     client_conf = stacks_conf[QuicGoPolicy.NAME]
     server_ip = general_conf["server_ip"]
@@ -103,7 +110,7 @@ def build_run(args, stacks_conf, general_conf):
     server.set_run_root(server_root)
     client.set_run_root(client_root)
 
-    target = server.get_client_target(port)
+    target = server.get_client_target(port, workload=workload)
     scheduled_start = time.time_ns() + 1_000_000_000
     server_command = server.run_server_cmd(port, args.duration + 5)
     client_command = client.run_client_cmd(
@@ -119,6 +126,7 @@ def build_run(args, stacks_conf, general_conf):
         "client": client,
         "port": port,
         "target": target,
+        "workload": workload,
         "scheduled_start": scheduled_start,
         "run_dir": run_dir,
         "server_command": server_command,
@@ -144,12 +152,25 @@ def manifest(args, run):
     return {
         "server_stack": args.server,
         "server_binary": run["server"].server_path,
+        "server_protocol": run["target"]["protocol"],
+        "server_config": {
+            "cc": "cubic",
+            "requested_cc": "cubic",
+            "icw": "not-configured",
+            "pacing": "adapter-default",
+            "gso": "adapter-default",
+        },
         "client_binary": run["client"].client_path,
         "protocol": run["target"]["protocol"],
         "ack_policy": args.ack_policy,
         "port": run["port"],
         "local_port": args.local_port,
         "client_target": run["target"],
+        "workload_name": run["workload"]["name"],
+        "requested_bytes": run["workload"]["bytes"],
+        "duration_s": args.duration,
+        "duration": args.duration,
+        "generated_target": generated_target(run["target"]),
         "server_command": run["server_command_text"],
         "client_command": run["client_command_text"],
         "command": run["client_command_text"],
@@ -166,15 +187,26 @@ def write_manifest(path, payload):
 
 def main():
     args = parse_args()
+    workload_profiles = load_workload_profiles(args.workloads_conf)
+    workload = resolve_workload(workload_profiles, args.workload)
+    if args.duration is None:
+        args.duration = workload["duration_s"]
+    else:
+        workload["duration_s"] = args.duration
     if args.duration <= 0:
         raise SystemExit("--duration must be > 0")
     stacks_conf = load_json(args.stacks_conf)
     general_conf = load_json(args.general_conf)
-    run = build_run(args, stacks_conf, general_conf)
+    run = build_run(args, stacks_conf, general_conf, workload)
 
     print("server_stack: {}".format(args.server))
     print("protocol: {}".format(run["target"]["protocol"]))
     print("ack_policy: {}".format(args.ack_policy))
+    print(
+        "workload: {} bytes={} duration_s={}".format(
+            workload["name"], workload["bytes"], workload["duration_s"]
+        )
+    )
     print("server_command: {}".format(run["server_command_text"]))
     print("client_command: {}".format(run["client_command_text"]))
     if args.dry_run:

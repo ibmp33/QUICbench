@@ -21,6 +21,7 @@ from stacks.quic_go import (
     QuicGoPolicy,
 )
 from stacks.xquic import Xquic
+from workloads import generated_target, load_workload_profiles, resolve_workload
 
 
 STACK_CLASSES = {
@@ -39,6 +40,12 @@ def get_prog_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stacks_conf", "-s", type=str, default="./config/stacks_conf_default.json")
     parser.add_argument("--general_conf", "-k", type=str, default="./config/general_conf_default.json")
+    parser.add_argument(
+        "--workloads-conf",
+        type=str,
+        default="./config/workloads_conf_default.json",
+        help="workload profile configuration",
+    )
     parser.add_argument("--exp_conf", "-e", type=str, default="./config/B0_two_flow_fairness_no_jitter.json")
     parser.add_argument("--server-stack-name", type=str, help="override the shared server stack for all flows")
     parser.add_argument("--num-trials", type=int, help="override exp_conf num_trials")
@@ -240,6 +247,32 @@ def apply_runtime_overrides(args, exp_conf):
         exp_conf["num_trials"] = args.num_trials
 
 
+def activate_workload(exp_conf, workload_profiles):
+    workload_name = exp_conf.get("workload_name")
+    if not workload_name:
+        # Preserve historical validation experiments that predate workload
+        # profiles. New fairness configs must select a named profile.
+        workload = {
+            "name": "legacy-validation",
+            "bytes": 16777216,
+            "duration_s": int(exp_conf["flow_duration_s"]),
+        }
+    else:
+        try:
+            workload = resolve_workload(workload_profiles, workload_name)
+        except ValueError as exc:
+            fail(str(exc))
+    exp_conf["workload"] = workload
+    # Keep this derived field for the existing parser/network interfaces. The
+    # profile remains the single source of truth.
+    exp_conf["flow_duration_s"] = workload["duration_s"]
+    exp_conf.setdefault("fixed_parameters", {})
+    exp_conf["fixed_parameters"]["same_workload_name"] = workload["name"]
+    exp_conf["fixed_parameters"]["same_runtime_seconds"] = workload["duration_s"]
+    exp_conf["fixed_parameters"]["same_requested_bytes"] = workload["bytes"]
+    return workload
+
+
 def get_selected_network_profiles(args, exp_conf):
     profiles = get_network_profiles(exp_conf)
     profile_map = {profile["name"]: profile for profile in profiles}
@@ -277,8 +310,20 @@ def validate_experiment(stacks_conf, exp_conf):
     validate_network_profiles(exp_conf)
     if int(exp_conf["flow_duration_s"]) <= 0:
         fail("flow_duration_s must be > 0.")
-    if not exp_conf.get("large_test_object"):
-        fail("large_test_object must be documented in the experiment config.")
+    workload = exp_conf.get("workload")
+    if not workload:
+        fail("An active workload profile is required.")
+    topology_mode = exp_conf.get("topology_mode")
+    allowed_topologies = {
+        "shared-server-shared-port",
+        "same-implementation-different-ports-control",
+    }
+    if topology_mode not in allowed_topologies:
+        fail(
+            "topology_mode must be one of: {}.".format(
+                ", ".join(sorted(allowed_topologies))
+            )
+        )
     for trial in exp_conf["trials"]:
         flows = trial["flows"]
         if len(flows) != 2:
@@ -329,8 +374,23 @@ def validate_experiment(stacks_conf, exp_conf):
                 fail("Trial '{}' reuses local_port {}.".format(trial["name"], local_port))
             if local_port is not None:
                 local_ports.add(int(local_port))
-            if flow["cc_algo"] != "cubic":
-                fail("Trial '{}' must keep cc_algo fixed at 'cubic'.".format(trial["name"]))
+        if any(flow["cc_algo"] != "cubic" for flow in flows):
+            fail("Trial '{}' must keep cc_algo fixed at 'cubic'.".format(trial["name"]))
+        if topology_mode == "shared-server-shared-port":
+            server_endpoints = {
+                (resolve_server_stack_name(exp_conf, flow), str(flow["port_no"]))
+                for flow in flows
+            }
+            if len(server_endpoints) != 1:
+                fail(
+                    "Trial '{}' violates main fairness semantics: both flows must use "
+                    "one server stack and one listening port.".format(trial["name"])
+                )
+            if len(local_ports) != len(flows):
+                fail(
+                    "Trial '{}' violates main fairness semantics: every flow must use "
+                    "a distinct local UDP port.".format(trial["name"])
+                )
 
 
 def get_required_stack_names(exp_conf):
@@ -568,19 +628,20 @@ def build_flow_plans(stacks, exp_conf, trial, run_results_dir):
                 stacks[server_stack_name],
                 flow,
                 exp_conf["flow_duration_s"],
+                exp_conf["workload"],
                 run_results_dir,
             )
         )
     return plans
 
 
-def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, flow, flow_duration_s, run_results_dir):
+def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, flow, flow_duration_s, workload, run_results_dir):
     port_no = str(flow["port_no"])
     client_run_root = get_flow_client_run_root(run_results_dir, flow)
     server_run_root = get_flow_server_run_root(run_results_dir, server_stack_name, port_no)
     client_paths = with_stack_run_root(client_stack, client_run_root, lambda: client_stack.get_flow_paths(port_no))
     server_paths = with_stack_run_root(server_stack, server_run_root, lambda: server_stack.get_flow_paths(port_no))
-    client_target = server_stack.get_client_target(port_no)
+    client_target = server_stack.get_client_target(port_no, workload=workload)
     return {
         "flow_id": flow["flow_id"],
         "stack_name": client_stack_name,
@@ -592,6 +653,10 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
         "local_port": flow.get("local_port"),
         "port_no": port_no,
         "protocol": client_target["protocol"],
+        "workload_name": workload["name"],
+        "requested_bytes": workload["bytes"],
+        "duration_s": workload["duration_s"],
+        "generated_target": generated_target(client_target),
         "client_target": client_target,
         "client_run_root": client_run_root,
         "server_run_root": server_run_root,
@@ -646,6 +711,14 @@ def print_preflight_summary(exp_conf, general_conf, profile_name, trial_name, ru
     )
     print("server_stack: {}".format(exp_conf.get("fixed_parameters", {}).get("server_stack_name")))
     print("num_trials: {}".format(exp_conf["num_trials"]))
+    print(
+        "workload: {} bytes={} duration_s={}".format(
+            exp_conf["workload"]["name"],
+            exp_conf["workload"]["bytes"],
+            exp_conf["workload"]["duration_s"],
+        )
+    )
+    print("topology_mode: {}".format(exp_conf["topology_mode"]))
     unique_servers = sorted({(plan["server_stack_name"], plan["port_no"]) for plan in flow_plans})
     print("server_instances: {}".format(len(unique_servers)))
     for plan in flow_plans:
@@ -665,6 +738,7 @@ def print_preflight_summary(exp_conf, general_conf, profile_name, trial_name, ru
         print("  client_qlog: {}".format(plan["client_qlog_dir"]))
         print("  server_log: {}".format(plan["server_log_path"]))
         print("  client_log: {}".format(plan["client_log_path"]))
+        print("  generated_target: {}".format(plan["generated_target"]))
         print("  server_cmd: {}".format(plan["server_cmd"]))
         print("  client_cmd: {}".format(plan["client_cmd"]))
 
@@ -739,6 +813,17 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
         "pcap_path": os.path.join(run_results_dir, "packets.pcap"),
         "start_timestamp": now(),
         "client_start_order": [],
+        "workload_name": flow_plans[0]["workload_name"],
+        "requested_bytes": flow_plans[0]["requested_bytes"],
+        "duration_s": flow_plans[0]["duration_s"],
+        "duration": flow_plans[0]["duration_s"],
+        "generated_target": flow_plans[0]["generated_target"],
+        "topology_mode": "shared-server-shared-port"
+        if len({(plan["server_stack_name"], plan["port_no"]) for plan in flow_plans}) == 1
+        else "same-implementation-different-ports-control",
+        "server_instance_count": len(
+            {(plan["server_stack_name"], plan["port_no"]) for plan in flow_plans}
+        ),
         "host": {
             "platform": platform.platform(),
             "kernel": platform.release(),
@@ -758,6 +843,11 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                 "local_port": plan["local_port"],
                 "ack_policy": plan["ack_policy"],
                 "protocol": plan["protocol"],
+                "workload_name": plan["workload_name"],
+                "requested_bytes": plan["requested_bytes"],
+                "duration_s": plan["duration_s"],
+                "duration": plan["duration_s"],
+                "generated_target": plan["generated_target"],
                 "client_target": plan["client_target"],
                 "server_qlog_path": plan["server_qlog_dir"],
                 "client_qlog_path": plan["client_qlog_dir"],
@@ -771,6 +861,14 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                 "server_binary_path": plan["server_binary_path"],
                 "server_binary": plan["server_binary_path"],
                 "server_binary_sha256": file_sha256(plan["server_binary_path"]),
+                "server_protocol": plan["protocol"],
+                "server_config": {
+                    "cc": plan["cc_algo"],
+                    "requested_cc": plan["cc_algo"],
+                    "icw": "not-configured",
+                    "pacing": "adapter-default",
+                    "gso": "adapter-default",
+                },
                 "server_command": plan["server_cmd"],
                 "client_command": plan["client_cmd"],
                 "command": plan["client_cmd"],
@@ -923,12 +1021,12 @@ def main():
     stacks_conf = load_json(args.stacks_conf)
     general_conf = load_json(args.general_conf)
     exp_conf = load_json(args.exp_conf)
+    workload_profiles = load_workload_profiles(args.workloads_conf)
     apply_runtime_overrides(args, exp_conf)
+    activate_workload(exp_conf, workload_profiles)
     stack_family = normalize_experiment_identity(exp_conf)
 
     validate_experiment(stacks_conf, exp_conf)
-    validate_local_paths(stacks_conf, exp_conf)
-    validate_local_topology(general_conf, stacks_conf)
 
     server_ip, interface, server_ingress_interface = itemgetter("server_ip", "interface", "server_ingress_interface")(general_conf)
     stacks = instantiate_stacks(stacks_conf, general_conf)
@@ -947,6 +1045,8 @@ def main():
         print("Dry run complete. No processes launched.")
         return
 
+    validate_local_paths(stacks_conf, exp_conf)
+    validate_local_topology(general_conf, stacks_conf)
     check_sudo_privileges()
     set_kernel_params(general_conf["kernel_params"])
 
@@ -1016,7 +1116,7 @@ def main():
                     )
                     dump_tc_state(interface, server_ingress_interface)
                     parse_trial(
-                        os.path.abspath(args.exp_conf),
+                        os.path.join(run_results_dir, "effective_experiment_config.json"),
                         os.path.abspath(args.general_conf),
                         profile["name"],
                         trial_name,

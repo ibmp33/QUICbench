@@ -10,6 +10,11 @@
 QUIC bench is a tool for automatic benchmarking of IETF QUIC stacks to help us understand their transport-layer performance.
 After being deployed on a testbed, and with the configurations specified, it can run benchmarking experiments, capture transport-layer metrics, and generate visualizations of these metrics.
 
+The scientific invariants for ACK-policy experiments are documented in
+[`EXPERIMENT_SEMANTICS.md`](EXPERIMENT_SEMANTICS.md). Main fairness runs keep
+one server process, one listening port, and two independent QUIC connections,
+and must pass workload-saturation validation.
+
 ## Extensions in this fork
 
 This fork separates the client ACK policy from the server implementation:

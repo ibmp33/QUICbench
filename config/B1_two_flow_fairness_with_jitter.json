@@ -3,9 +3,9 @@
     "description": "Two-flow shared-bottleneck fairness experiment with quic-go ACK variants under added path jitter.",
     "experiment_results_dir": "/home/ioio33/QUIC_project/results/B1-two-flow-fairness-with-jitter",
     "num_trials": 10,
-    "flow_duration_s": 60,
+    "workload_name": "fairness",
+    "topology_mode": "same-implementation-different-ports-control",
     "throughput_window_s": 0.5,
-    "large_test_object": "/1GB.bin",
     "allowed_stack_names": [
         "quic-go-ack2",
         "quic-go-ack5",

@@ -8,6 +8,10 @@
         "server_root": "/home/ioio33/QUIC_project/bin",
         "server_addr": "{server_ip}:{port}",
         "client_url_template": "https://{server_ip}:{port}/index.txt",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/index.txt",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "protocol": "http3",
         "default_port": 4433,
         "client_timeout": null,
@@ -23,6 +27,10 @@
         "server_root": null,
         "server_addr": "0.0.0.0:{port}",
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "protocol": "http3",
         "default_port": 4445,
         "client_timeout": null,
@@ -38,6 +46,10 @@
         "server_root": "/home/ioio33/QUIC_project/bin",
         "server_addr": "{server_ip}:{port}",
         "client_url_template": "https://{server_ip}:{port}/path/resource",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/path/resource",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "client_server_name": "test.xquic.com",
         "protocol": "http3",
         "default_port": 8443,
@@ -70,6 +82,10 @@
         "server_root": null,
         "server_addr": "0.0.0.0:{port}",
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "protocol": "http3",
         "default_port": 4445,
         "client_timeout": null,
@@ -85,6 +101,10 @@
         "server_root": null,
         "server_addr": "0.0.0.0:{port}",
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "protocol": "http3",
         "default_port": 4445,
         "client_timeout": null,
@@ -100,6 +120,10 @@
         "server_root": null,
         "server_addr": "0.0.0.0:{port}",
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "protocol": "http3",
         "default_port": 4445,
         "client_timeout": null,
@@ -115,6 +139,10 @@
         "server_root": null,
         "server_addr": "0.0.0.0:{port}",
         "client_url_template": "https://{server_ip}:{port}/bytes/16777216",
+        "workload_url_templates": {
+            "smoke": "https://{server_ip}:{port}/bytes/{bytes}",
+            "fairness": "https://{server_ip}:{port}/bytes/{bytes}"
+        },
         "protocol": "http3",
         "default_port": 4445,
         "client_timeout": null,

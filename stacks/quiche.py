@@ -27,6 +27,8 @@ class Quiche(Stack):
         client_netns="quicbench-client",
         client_timeout="30s",
         client_url_template=None,
+        workload_url_template=None,
+        workload_url_templates=None,
         client_addr_template=None,
         client_server_name=None,
         protocol="http3",
@@ -45,6 +47,8 @@ class Quiche(Stack):
         self.client_netns = client_netns
         self.client_timeout = client_timeout
         self.client_url_template = client_url_template
+        self.workload_url_template = workload_url_template
+        self.workload_url_templates = workload_url_templates or {}
         self.client_addr_template = client_addr_template
         self.client_server_name = client_server_name
         self.protocol = protocol
@@ -196,9 +200,18 @@ class Quiche(Stack):
             return self.server_addr.format(port=port_no, server_ip=self.server_ip)
         return "0.0.0.0:{}".format(port_no)
 
-    def _get_client_url(self, port_no):
-        if self.client_url_template:
-            return self.client_url_template.format(port=port_no, server_ip=self.server_ip)
+    def _get_client_url(self, port_no, workload=None):
+        template = self.client_url_template
+        if workload:
+            template = self.workload_url_templates.get(
+                workload["name"], self.workload_url_template or template
+            )
+        if template:
+            return template.format(
+                port=port_no,
+                server_ip=self.server_ip,
+                bytes=workload["bytes"] if workload else "",
+            )
         return "https://{}:{}/".format(self.server_ip, port_no)
 
     def _get_client_timeout(self, duration_s):
@@ -206,13 +219,18 @@ class Quiche(Stack):
             return self.client_timeout
         return "{}s".format(int(duration_s))
 
-    def get_client_target(self, port_no=None):
+    def get_client_target(self, port_no=None, workload=None):
         port_no = str(port_no or self.default_port)
         if not port_no or port_no == "None":
             raise ValueError("no port supplied for stack '{}'".format(self.NAME))
-        target = {"protocol": self.protocol, "url": self._get_client_url(port_no)}
+        target = {
+            "protocol": self.protocol,
+            "url": self._get_client_url(port_no, workload=workload),
+        }
         if self.client_server_name:
             target["server_name"] = self.client_server_name
+        if workload:
+            target["max_bytes"] = int(workload["bytes"])
         return target
 
     @staticmethod

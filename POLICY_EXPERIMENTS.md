@@ -34,6 +34,12 @@ Keep the existing quic-go server binary at:
 
 ## Run order
 
+Workloads are defined in `config/workloads_conf_default.json`. Adapter smoke
+tests use the `smoke` profile; the main P0 campaign selects `fairness`, which
+generates a 1 GiB target and runs for 60 seconds. A completed process is not by
+itself a valid fairness sample: check `saturation_validation.valid` in
+`run_manifest.json` or `saturation_valid` in `summary.csv`.
+
 First run the small qlog-enabled validation:
 
 ```sh

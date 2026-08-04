@@ -10,6 +10,7 @@ import pandas as pd
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
 
 from constants import INTERFACE_PCAP_FILENAME
+from saturation import validate_saturation
 from utils.files import write_to_csv
 
 
@@ -303,8 +304,23 @@ def append_summary(summary_path, row):
         "jain_index",
         "steady_state_start_s",
         "steady_state_end_s",
+        "saturation_valid",
+        "invalid_reason",
     ]
-    file_exists = os.path.exists(summary_path)
+    file_exists = os.path.exists(summary_path) and os.path.getsize(summary_path) > 0
+    if file_exists:
+        with open(summary_path, newline="") as csvfile:
+            existing_rows = list(csv.reader(csvfile))
+        if existing_rows and existing_rows[0] != headers:
+            old_headers = existing_rows[0]
+            if headers[: len(old_headers)] != old_headers:
+                raise ValueError("existing summary.csv has an incompatible schema")
+            padding = len(headers) - len(old_headers)
+            migrated_rows = [headers] + [existing + [""] * padding for existing in existing_rows[1:]]
+            temporary_path = summary_path + ".schema-update"
+            with open(temporary_path, "w", newline="") as csvfile:
+                csv.writer(csvfile).writerows(migrated_rows)
+            os.replace(temporary_path, summary_path)
     with open(summary_path, "a", newline="") as csvfile:
         writer = csv.writer(csvfile)
         if not file_exists:
@@ -356,6 +372,11 @@ def main():
             steady_end_s,
         )
         ack_metrics = extract_ack_metrics(flow_metadata.get("client_qlog_path")) or {}
+        saturation = validate_saturation(
+            flow_metadata.get("client_metrics_path"),
+            steady_start_s,
+            steady_end_s,
+        )
         results.append(
             {
                 "flow": flow,
@@ -366,6 +387,8 @@ def main():
                 "avg_tp": avg_tp,
                 "app_goodput": app_goodput,
                 "ack_metrics": ack_metrics,
+                "saturation": saturation,
+                "flow_metadata": flow_metadata,
             }
         )
         write_to_csv(
@@ -376,6 +399,32 @@ def main():
 
     total_tp = sum(result["avg_tp"] for result in results)
     fairness = jain_index([result["avg_tp"] for result in results])
+    run_saturation_valid = all(result["saturation"]["valid"] for result in results)
+    invalid_reasons = [
+        "{}: {}".format(result["flow"]["flow_id"], result["saturation"]["reason"])
+        for result in results
+        if not result["saturation"]["valid"]
+    ]
+    manifest["experiment_valid"] = run_saturation_valid
+    manifest["invalid_reason"] = "; ".join(invalid_reasons)
+    manifest["saturation_validation"] = {
+        "valid": run_saturation_valid,
+        "reason": "; ".join(invalid_reasons) if invalid_reasons else "all flows remained saturated",
+        "measurement_window_start_s": steady_start_s,
+        "measurement_window_end_s": steady_end_s,
+        "flows": {
+            result["flow"]["flow_id"]: result["saturation"] for result in results
+        },
+    }
+    for flow_manifest in manifest.get("flows", []):
+        matching = next(
+            (result for result in results if result["flow"]["flow_id"] == flow_manifest["flow_id"]),
+            None,
+        )
+        if matching:
+            flow_manifest["saturation_validation"] = matching["saturation"]
+    with open(manifest_path, "w") as manifest_file:
+        json.dump(manifest, manifest_file, indent=2)
     run_id = os.path.basename(args.trial_dir)
 
     per_run_rows = []
@@ -399,6 +448,8 @@ def main():
                 share,
                 steady_start_s,
                 steady_end_s,
+                result["saturation"]["valid"],
+                "" if result["saturation"]["valid"] else result["saturation"]["reason"],
             ]
         )
         append_summary(
@@ -421,6 +472,8 @@ def main():
                 fairness,
                 steady_start_s,
                 steady_end_s,
+                result["saturation"]["valid"],
+                "" if result["saturation"]["valid"] else result["saturation"]["reason"],
             ],
         )
 
@@ -441,6 +494,8 @@ def main():
             "share",
             "steady_state_start_s",
             "steady_state_end_s",
+            "saturation_valid",
+            "invalid_reason",
         ],
         per_run_rows,
     )

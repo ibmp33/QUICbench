@@ -1,0 +1,10 @@
+{
+    "smoke": {
+        "bytes": 16777216,
+        "duration_s": 10
+    },
+    "fairness": {
+        "bytes": 1073741824,
+        "duration_s": 60
+    }
+}
