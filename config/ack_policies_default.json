@@ -1,0 +1,33 @@
+{
+    "schema_version": 1,
+    "policies": {
+        "fixed2": {
+            "initial_threshold": 2,
+            "steady_threshold": 2,
+            "max_ack_delay_ms": 25,
+            "timer_rule": "max_ack_delay",
+            "reordering_ack": "immediate"
+        },
+        "fixed10": {
+            "initial_threshold": 10,
+            "steady_threshold": 10,
+            "max_ack_delay_ms": 25,
+            "timer_rule": "max_ack_delay",
+            "reordering_ack": "immediate"
+        },
+        "neqo": {
+            "threshold": 2,
+            "max_ack_delay_ms": 20,
+            "timer_rule": "max_ack_delay",
+            "reordering_ack": "immediate"
+        },
+        "chromium": {
+            "initial_threshold": 2,
+            "steady_threshold": 10,
+            "switch_after_packets": 100,
+            "max_ack_delay_ms": 25,
+            "timer_rule": "max(1ms,min(max_ack_delay,min_rtt/4))",
+            "reordering_ack": "immediate"
+        }
+    }
+}

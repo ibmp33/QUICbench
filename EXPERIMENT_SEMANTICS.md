@@ -22,6 +22,11 @@ The runner must reject a trial before launch if its two flows resolve to
 different server stacks or ports, or if their local UDP ports are missing or
 equal.
 
+After launch, the runner resolves the actual server executable PID inside the
+server network namespace. A main trial proceeds only when exactly one PID maps
+to the configured server binary. The run-level PID and the same PID on both
+flow records provide runtime evidence for the shared-server invariant.
+
 Starting one server per flow, assigning different server ports, or sharing one
 QUIC connection between flows changes the experimental question and is not
 allowed in the main campaign.
@@ -34,7 +39,8 @@ scheduling effects and must not be pooled with the main fairness results.
 
 All policy flows use the same `quic-go-policy-client` binary. The receiver ACK
 policy is selected only through the runtime `-ack-policy` argument. The client
-binary hash and selected policy are recorded in each run manifest.
+binary hash, build commit, selected policy, and versioned policy parameters are
+recorded in each run manifest.
 
 ## Workload saturation
 

@@ -3,7 +3,9 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
+from ack_policies import load_ack_policy_configs
 import run_B0_two_flow_fairness_no_jitter as fairness_runner
 from saturation import validate_saturation
 from workloads import load_workload_profiles
@@ -26,6 +28,10 @@ class ExperimentSemanticsTest(unittest.TestCase):
             os.path.join(ROOT, "config/workloads_conf_default.json")
         )
         fairness_runner.activate_workload(self.exp_conf, profiles)
+        ack_policies = load_ack_policy_configs(
+            os.path.join(ROOT, "config/ack_policies_default.json")
+        )
+        fairness_runner.activate_ack_policy_configs(self.exp_conf, ack_policies)
 
     def test_main_fairness_resolves_one_server_endpoint(self):
         fairness_runner.validate_experiment(self.stacks_conf, self.exp_conf)
@@ -42,6 +48,8 @@ class ExperimentSemanticsTest(unittest.TestCase):
             {plan["generated_target"] for plan in plans},
             {"https://198.19.0.2:4433/bytes/1073741824"},
         )
+        self.assertEqual(plans[0]["ack_policy_config"]["threshold"], 2)
+        self.assertEqual(plans[1]["ack_policy_config"]["switch_after_packets"], 100)
 
     def test_main_fairness_rejects_different_server_port(self):
         invalid = copy.deepcopy(self.exp_conf)
@@ -61,6 +69,50 @@ class ExperimentSemanticsTest(unittest.TestCase):
             result = validate_saturation(metrics_path, 10, 50)
         self.assertFalse(result["valid"])
         self.assertIn("no byte growth", result["reason"])
+
+    def test_main_matrix_contains_all_eight_policy_pairs(self):
+        pairs = {
+            tuple(flow["ack_policy"] for flow in trial["flows"])
+            for trial in self.exp_conf["trials"]
+        }
+        self.assertEqual(
+            pairs,
+            {
+                ("fixed2", "fixed2"),
+                ("fixed10", "fixed10"),
+                ("fixed2", "fixed10"),
+                ("fixed10", "fixed2"),
+                ("neqo", "chromium"),
+                ("chromium", "neqo"),
+                ("neqo", "neqo"),
+                ("chromium", "chromium"),
+            },
+        )
+
+    @mock.patch("run_B0_two_flow_fairness_no_jitter.subprocess.run")
+    def test_server_pid_is_resolved_from_namespace_binary(self, run_mock):
+        class Result:
+            def __init__(self, stdout="", returncode=0):
+                self.stdout = stdout
+                self.returncode = returncode
+
+        expected_binary = "/home/ioio33/QUIC_project/bin/quic-go-server"
+        resolved_expected_binary = os.path.realpath(expected_binary)
+
+        def command_result(command, **_kwargs):
+            if command[:5] == ["sudo", "-n", "ip", "netns", "pids"]:
+                return Result("101\n202\n")
+            if command[-1] == "/proc/101/exe":
+                return Result("/usr/bin/timeout\n")
+            if command[-1] == "/proc/202/exe":
+                return Result(resolved_expected_binary + "\n")
+            return Result(returncode=1)
+
+        run_mock.side_effect = command_result
+        stack = mock.Mock(server_netns="quicbench-server")
+        self.assertEqual(
+            fairness_runner.discover_server_pid(stack, expected_binary), 202
+        )
 
 
 if __name__ == "__main__":

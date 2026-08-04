@@ -1,6 +1,6 @@
 {
     "experiment_name": "P0-policy-fairness",
-    "description": "Two synchronized quic-go clients using implementation-derived Neqo and Chromium ACK policies against one shared server process.",
+    "description": "Eight ordered fixed-threshold and implementation-derived ACK-policy pairs using synchronized quic-go clients against one shared server process.",
     "experiment_results_dir": "/home/ioio33/QUIC_project/results/P0-policy-fairness",
     "num_trials": 10,
     "workload_name": "fairness",
@@ -159,6 +159,98 @@
                     "port_no": "4433",
                     "local_port": 54434,
                     "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "P5_fixed2_vs_fixed2",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "P6_fixed10_vs_fixed10",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "baseline"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "baseline"
+                }
+            ]
+        },
+        {
+            "name": "P7_fixed2_vs_fixed10",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "test"
+                }
+            ]
+        },
+        {
+            "name": "P8_fixed10_vs_fixed2",
+            "flows": [
+                {
+                    "flow_id": "flow_a",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed10",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54433,
+                    "role": "test"
+                },
+                {
+                    "flow_id": "flow_b",
+                    "stack_name": "quic-go-policy",
+                    "ack_policy": "fixed2",
+                    "cc_algo": "cubic",
+                    "port_no": "4433",
+                    "local_port": 54434,
+                    "role": "test"
                 }
             ]
         }

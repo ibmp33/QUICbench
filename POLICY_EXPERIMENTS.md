@@ -15,6 +15,11 @@ controller, object, path, duration, and synchronized request start.
   applicable.
 - ACK_FREQUENCY and IMMEDIATE_ACK control frames are intentionally out of scope.
 
+The manifest parameter definitions are versioned in
+`config/ack_policies_default.json`. Every flow records both the policy name and
+the complete `ack_policy_config`; the client binary SHA256 and build commit bind
+those declared parameters to the exact executable used by the run.
+
 ## Linux build
 
 Build the policy client from the modified quic-go tree:
@@ -39,6 +44,11 @@ tests use the `smoke` profile; the main P0 campaign selects `fairness`, which
 generates a 1 GiB target and runs for 60 seconds. A completed process is not by
 itself a valid fairness sample: check `saturation_validation.valid` in
 `run_manifest.json` or `saturation_valid` in `summary.csv`.
+
+The main P0 matrix contains eight ordered pairs: fixed2/fixed2,
+fixed10/fixed10, fixed2/fixed10, fixed10/fixed2, Neqo/Chromium,
+Chromium/Neqo, Neqo/Neqo, and Chromium/Chromium. Reversed heterogeneous pairs
+control for flow identity and client launch order.
 
 First run the small qlog-enabled validation:
 

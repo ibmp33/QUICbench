@@ -24,7 +24,7 @@ This fork separates the client ACK policy from the server implementation:
 - HTTP/3 server adapters: quic-go, Cloudflare quiche, and xquic
 - Raw QUIC stream server adapter: mvfst `tperf`
 - Per-run manifests containing protocol, policy, binary identity, commands,
-  paths, and timestamps
+  policy parameters, shared server PID, paths, and timestamps
 - Existing qlog, metrics, local-port, synchronized-start, duration, and result
   directory interfaces remain available to the experiment runners
 

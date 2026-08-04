@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from operator import itemgetter
 
+from ack_policies import load_ack_policy_configs
 from network.clear_netem import clear_netem
 from network.set_netem import set_netem
 from network.tcpdump import TCPDump
@@ -45,6 +46,12 @@ def get_prog_args():
         type=str,
         default="./config/workloads_conf_default.json",
         help="workload profile configuration",
+    )
+    parser.add_argument(
+        "--ack-policies-conf",
+        type=str,
+        default="./config/ack_policies_default.json",
+        help="ACK policy parameter configuration recorded in manifests",
     )
     parser.add_argument("--exp_conf", "-e", type=str, default="./config/B0_two_flow_fairness_no_jitter.json")
     parser.add_argument("--server-stack-name", type=str, help="override the shared server stack for all flows")
@@ -273,6 +280,11 @@ def activate_workload(exp_conf, workload_profiles):
     return workload
 
 
+def activate_ack_policy_configs(exp_conf, ack_policy_document):
+    exp_conf["ack_policy_config_schema_version"] = ack_policy_document["schema_version"]
+    exp_conf["ack_policy_configs"] = ack_policy_document["policies"]
+
+
 def get_selected_network_profiles(args, exp_conf):
     profiles = get_network_profiles(exp_conf)
     profile_map = {profile["name"]: profile for profile in profiles}
@@ -313,6 +325,7 @@ def validate_experiment(stacks_conf, exp_conf):
     workload = exp_conf.get("workload")
     if not workload:
         fail("An active workload profile is required.")
+    ack_policy_configs = exp_conf.get("ack_policy_configs") or {}
     topology_mode = exp_conf.get("topology_mode")
     allowed_topologies = {
         "shared-server-shared-port",
@@ -360,6 +373,12 @@ def validate_experiment(stacks_conf, exp_conf):
                             flow["flow_id"],
                             ack_policy,
                             ", ".join(sorted(QuicGoPolicy.ACK_POLICIES)),
+                        )
+                    )
+                if ack_policy not in ack_policy_configs:
+                    fail(
+                        "Trial '{}' flow '{}' has no manifest configuration for ACK policy '{}'.".format(
+                            trial["name"], flow["flow_id"], ack_policy
                         )
                     )
             elif ack_policy is not None:
@@ -618,6 +637,10 @@ def resolve_server_stack_name(exp_conf, flow):
 def build_flow_plans(stacks, exp_conf, trial, run_results_dir):
     plans = []
     for flow in trial["flows"]:
+        flow = dict(flow)
+        if flow.get("ack_policy"):
+            flow["ack_policy_config"] = exp_conf["ack_policy_configs"][flow["ack_policy"]]
+            flow["ack_policy_config_schema_version"] = exp_conf["ack_policy_config_schema_version"]
         client_stack_name = flow["stack_name"]
         server_stack_name = resolve_server_stack_name(exp_conf, flow)
         plans.append(
@@ -649,6 +672,11 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
         "server_stack_name": server_stack_name,
         "cc_algo": flow["cc_algo"],
         "ack_policy": flow.get("ack_policy"),
+        "ack_policy_config": dict(
+            flow.get("ack_policy_config")
+            or {}
+        ),
+        "ack_policy_config_schema_version": flow.get("ack_policy_config_schema_version"),
         "ack_freq": flow.get("ack_freq"),
         "local_port": flow.get("local_port"),
         "port_no": port_no,
@@ -719,6 +747,7 @@ def print_preflight_summary(exp_conf, general_conf, profile_name, trial_name, ru
         )
     )
     print("topology_mode: {}".format(exp_conf["topology_mode"]))
+    print("ack_policy_config_schema_version: {}".format(exp_conf["ack_policy_config_schema_version"]))
     unique_servers = sorted({(plan["server_stack_name"], plan["port_no"]) for plan in flow_plans})
     print("server_instances: {}".format(len(unique_servers)))
     for plan in flow_plans:
@@ -734,6 +763,7 @@ def print_preflight_summary(exp_conf, general_conf, profile_name, trial_name, ru
                 plan["run_dir"],
             )
         )
+        print("  ack_policy_config: {}".format(json.dumps(plan["ack_policy_config"], sort_keys=True)))
         print("  server_qlog: {}".format(plan["server_qlog_dir"]))
         print("  client_qlog: {}".format(plan["client_qlog_dir"]))
         print("  server_log: {}".format(plan["server_log_path"]))
@@ -772,6 +802,39 @@ def policy_client_git_commit(path):
         if separator and key.strip() == "commit":
             return value.strip() or None
     return None
+
+
+def discover_server_pid(stack, server_binary_path):
+    namespace = stack.server_netns
+    completed = subprocess.run(
+        ["sudo", "-n", "ip", "netns", "pids", namespace],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    expected_binary = os.path.realpath(server_binary_path)
+    matching_pids = []
+    for value in completed.stdout.split():
+        if not value.isdigit():
+            continue
+        pid = int(value)
+        resolved = subprocess.run(
+            ["sudo", "-n", "readlink", "-f", "/proc/{}/exe".format(pid)],
+            capture_output=True,
+            text=True,
+        )
+        if resolved.returncode == 0 and resolved.stdout.strip() == expected_binary:
+            matching_pids.append(pid)
+    if len(matching_pids) != 1:
+        fail(
+            "Expected exactly one {} process in namespace '{}', found {}: {}.".format(
+                server_binary_path,
+                namespace,
+                len(matching_pids),
+                matching_pids,
+            )
+        )
+    return matching_pids[0]
 
 
 def read_log_excerpt(path, max_chars=1200):
@@ -824,6 +887,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
         "server_instance_count": len(
             {(plan["server_stack_name"], plan["port_no"]) for plan in flow_plans}
         ),
+        "ack_policy_config_schema_version": flow_plans[0]["ack_policy_config_schema_version"],
         "host": {
             "platform": platform.platform(),
             "kernel": platform.release(),
@@ -842,6 +906,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                 "port": plan["port_no"],
                 "local_port": plan["local_port"],
                 "ack_policy": plan["ack_policy"],
+                "ack_policy_config": plan["ack_policy_config"],
                 "protocol": plan["protocol"],
                 "workload_name": plan["workload_name"],
                 "requested_bytes": plan["requested_bytes"],
@@ -905,6 +970,27 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
 
         time.sleep(2)
         assert_server_processes_healthy(server_processes)
+        server_runtime = {}
+        for server_plan, server_proc in server_processes:
+            server_key = (server_plan["server_stack_name"], server_plan["port_no"])
+            server_runtime[server_key] = {
+                "server_stack": server_plan["server_stack_name"],
+                "port": server_plan["port_no"],
+                "server_pid": discover_server_pid(
+                    stacks[server_plan["server_stack_name"]],
+                    server_plan["server_binary_path"],
+                ),
+                "server_launcher_pid": server_proc.pid,
+            }
+        metadata["servers"] = list(server_runtime.values())
+        metadata["server_pids"] = [server["server_pid"] for server in metadata["servers"]]
+        if len(metadata["servers"]) == 1:
+            metadata["server_pid"] = metadata["servers"][0]["server_pid"]
+        for plan, flow_metadata in zip(flow_plans, metadata["flows"]):
+            runtime = server_runtime[(plan["server_stack_name"], plan["port_no"])]
+            flow_metadata["server_pid"] = runtime["server_pid"]
+            flow_metadata["server_launcher_pid"] = runtime["server_launcher_pid"]
+        write_local_json(os.path.join(run_results_dir, "run_manifest.json"), metadata)
         if not interface_is_up(capture_interface):
             fail("Capture interface '{}' is down after netem setup; aborting before tcpdump.".format(capture_interface))
         log("Starting tcpdump for {}".format(run_results_dir))
@@ -1022,8 +1108,10 @@ def main():
     general_conf = load_json(args.general_conf)
     exp_conf = load_json(args.exp_conf)
     workload_profiles = load_workload_profiles(args.workloads_conf)
+    ack_policy_document = load_ack_policy_configs(args.ack_policies_conf)
     apply_runtime_overrides(args, exp_conf)
     activate_workload(exp_conf, workload_profiles)
+    activate_ack_policy_configs(exp_conf, ack_policy_document)
     stack_family = normalize_experiment_identity(exp_conf)
 
     validate_experiment(stacks_conf, exp_conf)

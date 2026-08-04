@@ -11,6 +11,7 @@ import sys
 import time
 from datetime import datetime
 
+from ack_policies import load_ack_policy_configs
 from stacks.mvfst import Mvfst
 from stacks.quiche import Quiche
 from stacks.quic_go import QuicGo, QuicGoPolicy
@@ -39,6 +40,7 @@ def parse_args():
     parser.add_argument("--stacks-conf", default="./config/stacks_conf_default.json")
     parser.add_argument("--general-conf", default="./config/general_conf_default.json")
     parser.add_argument("--workloads-conf", default="./config/workloads_conf_default.json")
+    parser.add_argument("--ack-policies-conf", default="./config/ack_policies_default.json")
     parser.add_argument("--workload", choices=["smoke", "fairness"], default="smoke")
     parser.add_argument("--port", type=int, help="override the adapter's verified default port")
     parser.add_argument(
@@ -88,7 +90,7 @@ def refresh_client_command(args, run, scheduled_start):
     run["client_command_text"] = command_text(run["client_command"])
 
 
-def build_run(args, stacks_conf, general_conf, workload):
+def build_run(args, stacks_conf, general_conf, workload, ack_policy_document):
     server_conf = stacks_conf[args.server]
     client_conf = stacks_conf[QuicGoPolicy.NAME]
     server_ip = general_conf["server_ip"]
@@ -127,6 +129,8 @@ def build_run(args, stacks_conf, general_conf, workload):
         "port": port,
         "target": target,
         "workload": workload,
+        "ack_policy_config": ack_policy_document["policies"][args.ack_policy],
+        "ack_policy_config_schema_version": ack_policy_document["schema_version"],
         "scheduled_start": scheduled_start,
         "run_dir": run_dir,
         "server_command": server_command,
@@ -163,6 +167,8 @@ def manifest(args, run):
         "client_binary": run["client"].client_path,
         "protocol": run["target"]["protocol"],
         "ack_policy": args.ack_policy,
+        "ack_policy_config": run["ack_policy_config"],
+        "ack_policy_config_schema_version": run["ack_policy_config_schema_version"],
         "port": run["port"],
         "local_port": args.local_port,
         "client_target": run["target"],
@@ -188,6 +194,7 @@ def write_manifest(path, payload):
 def main():
     args = parse_args()
     workload_profiles = load_workload_profiles(args.workloads_conf)
+    ack_policy_document = load_ack_policy_configs(args.ack_policies_conf)
     workload = resolve_workload(workload_profiles, args.workload)
     if args.duration is None:
         args.duration = workload["duration_s"]
@@ -197,11 +204,12 @@ def main():
         raise SystemExit("--duration must be > 0")
     stacks_conf = load_json(args.stacks_conf)
     general_conf = load_json(args.general_conf)
-    run = build_run(args, stacks_conf, general_conf, workload)
+    run = build_run(args, stacks_conf, general_conf, workload, ack_policy_document)
 
     print("server_stack: {}".format(args.server))
     print("protocol: {}".format(run["target"]["protocol"]))
     print("ack_policy: {}".format(args.ack_policy))
+    print("ack_policy_config: {}".format(json.dumps(run["ack_policy_config"], sort_keys=True)))
     print(
         "workload: {} bytes={} duration_s={}".format(
             workload["name"], workload["bytes"], workload["duration_s"]
