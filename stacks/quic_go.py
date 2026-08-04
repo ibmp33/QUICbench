@@ -157,7 +157,7 @@ class QuicGo(Stack):
             if target.get("server_name"):
                 client_cmd.extend(["-server-name", shlex.quote(target["server_name"])])
         elif target["protocol"] == "raw":
-            client_cmd.extend(["-addr", shlex.quote(target["addr"])])
+            client_cmd.extend(["-addr", shlex.quote(target["addr"]), "-insecure"])
         else:
             raise ValueError("unsupported client protocol {!r}".format(target["protocol"]))
         if self.SUPPORTS_EXPERIMENT_FLAGS:
