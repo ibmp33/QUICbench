@@ -39,6 +39,14 @@ def latest_manifests(root):
     return sorted(selected.values())
 
 
+def resolve_jain(row_a, row_b, share_a, share_b):
+    recorded = row_a.get("jain_index") or row_b.get("jain_index")
+    if recorded:
+        return float(recorded)
+    share_square_sum = share_a * share_a + share_b * share_b
+    return 1.0 / (2.0 * share_square_sum) if share_square_sum else 0.0
+
+
 def load_runs(root):
     runs = []
     incomplete = []
@@ -73,10 +81,13 @@ def load_runs(root):
         if config_a != config_b:
             incomplete.append(str(manifest_path.parent))
             continue
+        share_a = float(row_a["share"])
+        share_b = float(row_b["share"])
+        jain = resolve_jain(row_a, row_b, share_a, share_b)
         if row_a["ack_policy"] == "neqo":
-            neqo_share = float(row_a["share"])
+            neqo_share = share_a
         elif row_b["ack_policy"] == "neqo":
-            neqo_share = float(row_b["share"])
+            neqo_share = share_b
         else:
             incomplete.append(str(manifest_path.parent))
             continue
@@ -89,7 +100,7 @@ def load_runs(root):
                 "pacing": config_a.get("pacing"),
                 "pair": (row_a["ack_policy"], row_b["ack_policy"]),
                 "neqo_share": neqo_share,
-                "jain": float(row_a["jain_index"]),
+                "jain": jain,
                 "valid": manifest.get("experiment_valid") is True,
                 "saturated": manifest.get("saturation_validation", {}).get("valid")
                 is True,

@@ -7,6 +7,7 @@ from unittest import mock
 
 from ack_policies import load_ack_policy_configs
 import run_B0_two_flow_fairness_no_jitter as fairness_runner
+from scripts.analyze_sender_mechanism_pilot import resolve_jain
 from saturation import validate_saturation
 from workloads import load_workload_profiles
 
@@ -94,6 +95,17 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertTrue(fairness_runner.should_keep_artifact("first-only", 1))
         self.assertFalse(fairness_runner.should_keep_artifact("first-only", 2))
         self.assertFalse(fairness_runner.should_keep_artifact("none", 1))
+
+    def test_sender_analysis_calculates_jain_for_legacy_summary_schema(self):
+        calculated = resolve_jain({"share": "0.6"}, {"share": "0.4"}, 0.6, 0.4)
+        self.assertAlmostEqual(calculated, 1.0 / (2.0 * (0.6 ** 2 + 0.4 ** 2)))
+        recorded = resolve_jain(
+            {"share": "0.6", "jain_index": "0.91"},
+            {"share": "0.4", "jain_index": "0.91"},
+            0.6,
+            0.4,
+        )
+        self.assertEqual(recorded, 0.91)
 
     def test_quic_go_declares_effective_server_controls(self):
         stacks = fairness_runner.instantiate_stacks(
