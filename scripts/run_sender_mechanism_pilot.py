@@ -44,7 +44,7 @@ SUITES = {
 
 CAPABILITIES = {
     "quiche": {"cc": {"cubic", "reno"}, "pacing": True, "protocol": "http3"},
-    "xquic": {"cc": {"cubic", "reno"}, "pacing": True, "protocol": "http3"},
+    "xquic": {"cc": {"cubic", "reno", "bbr"}, "pacing": True, "protocol": "http3"},
     "mvfst": {"cc": {"cubic", "reno", "bbr"}, "pacing": True, "protocol": "raw"},
 }
 
@@ -235,6 +235,9 @@ def condition_documents(
     exp["fixed_parameters"]["same_cc_algo"] = cc_algo
     exp["fixed_parameters"]["server_pacing"] = pacing
     exp["fixed_parameters"]["condition_id"] = condition
+    exp["allowed_cc_algos"] = sorted(
+        set(exp.get("allowed_cc_algos", [])).union({cc_algo})
+    )
     if canary:
         exp["trials"] = [
             trial

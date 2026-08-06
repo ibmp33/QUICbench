@@ -38,6 +38,8 @@ class QuicGo(Stack):
         server_pacing="enabled",
         server_gso="implementation-default",
         workload_capabilities=None,
+        client_ack_frequency_mode="disabled",
+        client_min_ack_delay=None,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -62,6 +64,16 @@ class QuicGo(Stack):
         self.server_pacing = server_pacing
         self.server_gso = server_gso
         self.workload_capabilities = workload_capabilities or {}
+        if client_ack_frequency_mode not in {"disabled", "mvfst-draft"}:
+            raise ValueError(
+                "unsupported client ACK_FREQUENCY mode {!r}".format(
+                    client_ack_frequency_mode
+                )
+            )
+        if client_ack_frequency_mode != "disabled" and not client_min_ack_delay:
+            client_min_ack_delay = "1ms"
+        self.client_ack_frequency_mode = client_ack_frequency_mode
+        self.client_min_ack_delay = client_min_ack_delay
         self.run_root = None
         self.qlog_enabled = False
 
@@ -207,6 +219,15 @@ class QuicGo(Stack):
                     shlex.quote(os.path.join(run_dir, "metrics.csv")),
                 ]
             )
+            if self.client_ack_frequency_mode != "disabled":
+                client_cmd.extend(
+                    [
+                        "-ack-frequency-mode",
+                        shlex.quote(self.client_ack_frequency_mode),
+                        "-min-ack-delay",
+                        shlex.quote(str(self.client_min_ack_delay)),
+                    ]
+                )
             if target.get("max_bytes") is not None:
                 client_cmd.extend(["-max-bytes", shlex.quote(str(target["max_bytes"]))])
             if local_port is not None:
@@ -328,6 +349,19 @@ class QuicGo(Stack):
         if self.client_timeout:
             return self.client_timeout
         return "{}s".format(int(duration_s))
+
+    def get_client_feedback_config(self):
+        config = {"ack_frequency_mode": self.client_ack_frequency_mode}
+        if self.client_ack_frequency_mode != "disabled":
+            config.update(
+                {
+                    "min_ack_delay": str(self.client_min_ack_delay),
+                    "min_ack_delay_transport_parameter_id": "0xff04de1a",
+                    "ack_frequency_frame_type": "0xaf",
+                    "immediate_ack_frame_type": "0xac",
+                }
+            )
+        return config
 
     @staticmethod
     def get_cc_algos():

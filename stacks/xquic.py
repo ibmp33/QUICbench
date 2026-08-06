@@ -9,6 +9,7 @@ class Xquic(Stack):
     NAME = "xquic"
     CUBIC = "cubic"
     RENO = "reno"
+    BBR = "bbr"
 
     def __init__(
         self,
@@ -307,4 +308,4 @@ class Xquic(Stack):
 
     @staticmethod
     def get_cc_algos():
-        return [Xquic.CUBIC, Xquic.RENO]
+        return [Xquic.CUBIC, Xquic.RENO, Xquic.BBR]

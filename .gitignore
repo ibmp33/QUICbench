@@ -6,3 +6,6 @@ __pycache__/
 .venv/
 results/
 logs/
+/quicbench-export/
+/quicbench-export*.tar.gz
+/quicbench-export*.tar.gz.sha256

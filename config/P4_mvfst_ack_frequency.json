@@ -1,0 +1,71 @@
+{
+    "experiment_name": "P4-mvfst-ack-frequency",
+    "description": "BBR1 ACK_FREQUENCY mitigation pilot with receiver-policy role reversal.",
+    "experiment_results_dir": "/home/ioio33/QUIC_project/results/P4-mvfst-ack-frequency",
+    "num_trials": 3,
+    "workload_name": "pilot",
+    "topology_mode": "shared-server-shared-port",
+    "throughput_window_s": 0.5,
+    "steady_state_window_s": {
+        "start": 5,
+        "end": 15
+    },
+    "enable_qlog": true,
+    "allowed_stack_names": [
+        "quic-go-policy"
+    ],
+    "allowed_cc_algos": [
+        "bbr"
+    ],
+    "fixed_parameters": {
+        "stack_family": "mvfst-server",
+        "server_stack_name": "mvfst",
+        "same_cc_algo": "bbr",
+        "server_pacing": "on",
+        "same_flow_count": 2,
+        "runtime_model": "20-second raw-QUIC mitigation pilot over two synchronized connections to one mvfst BBR1 server",
+        "treatment_dimension": "receiver-controlled versus sender-requested ACK feedback"
+    },
+    "default_network_profile": "50rtt-20bw-0.5bdp",
+    "network_profiles": [
+        {
+            "name": "50rtt-20bw-0.5bdp",
+            "netem_conf": {
+                "RTT_ms": 50,
+                "bandwidth_Mbps": 20,
+                "buffer_bdp": 0.5,
+                "reverse_bottleneck": false
+            }
+        }
+    ],
+    "trials": [
+        {
+            "name": "P4_neqo_vs_neqo",
+            "flows": [
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "baseline"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "baseline"}
+            ]
+        },
+        {
+            "name": "P4_chromium_vs_chromium",
+            "flows": [
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "baseline"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "baseline"}
+            ]
+        },
+        {
+            "name": "P4_neqo_vs_chromium",
+            "flows": [
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "test"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "test"}
+            ]
+        },
+        {
+            "name": "P4_chromium_vs_neqo",
+            "flows": [
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "test"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "test"}
+            ]
+        }
+    ]
+}

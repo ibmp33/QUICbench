@@ -769,6 +769,11 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
     client_paths = with_stack_run_root(client_stack, client_run_root, lambda: client_stack.get_flow_paths(port_no))
     server_paths = with_stack_run_root(server_stack, server_run_root, lambda: server_stack.get_flow_paths(port_no))
     client_target = server_stack.get_client_target(port_no, workload=workload)
+    client_feedback_config = (
+        client_stack.get_client_feedback_config()
+        if hasattr(client_stack, "get_client_feedback_config")
+        else {"ack_frequency_mode": "unsupported"}
+    )
     return {
         "flow_id": flow["flow_id"],
         "stack_name": client_stack_name,
@@ -790,6 +795,7 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
         "duration_s": workload["duration_s"],
         "generated_target": generated_target(client_target),
         "client_target": client_target,
+        "client_feedback_config": client_feedback_config,
         "client_run_root": client_run_root,
         "server_run_root": server_run_root,
         "run_dir": client_paths["run_dir"],
@@ -996,6 +1002,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
             {(plan["server_stack_name"], plan["port_no"]) for plan in flow_plans}
         ),
         "ack_policy_config_schema_version": flow_plans[0]["ack_policy_config_schema_version"],
+        "fixed_parameters": dict(exp_conf.get("fixed_parameters") or {}),
         "host": {
             "platform": platform.platform(),
             "kernel": platform.release(),
@@ -1022,6 +1029,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                 "duration": plan["duration_s"],
                 "generated_target": plan["generated_target"],
                 "client_target": plan["client_target"],
+                "client_feedback_config": plan["client_feedback_config"],
                 "server_qlog_path": plan["server_qlog_dir"],
                 "client_qlog_path": plan["client_qlog_dir"],
                 "server_log_path": plan["server_log_path"],

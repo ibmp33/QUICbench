@@ -110,6 +110,11 @@
         "server_cc_algo": "cubic",
         "server_pacing": "disabled",
         "server_gso": "enabled",
+        "server_ack_frequency": false,
+        "server_ack_frequency_threshold": 10,
+        "server_ack_frequency_reordering_threshold": 3,
+        "server_ack_frequency_min_rtt_divisor": 2,
+        "server_ack_frequency_startup_ack2": true,
         "workload_capabilities": {
             "pilot": {
                 "mode": "continuous-stream"
@@ -234,6 +239,8 @@
         "server_cc_algo": "cubic",
         "server_pacing": "enabled",
         "server_gso": "implementation-default",
+        "client_ack_frequency_mode": "disabled",
+        "client_min_ack_delay": null,
         "workload_capabilities": {
             "pilot": {
                 "mode": "dynamic-response"
