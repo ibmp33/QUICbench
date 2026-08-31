@@ -17,7 +17,6 @@ MAIN_PATH_COUNT = 11
 MAIN_RUN_COUNT = 400
 SMOKE_RUN_COUNT = MAIN_PATH_COUNT * len(POLICY_PAIRS)
 SENSITIVITY_RUN_COUNT = 120
-OPTIONAL_LOSS_RUN_COUNT = 40
 
 
 class MatrixError(ValueError):
@@ -78,6 +77,14 @@ def load_matrix(path):
                 )
         if profile.get("reverse_bottleneck") is not False:
             raise MatrixError("Paper-v1 reverse paths must not be bandwidth limited")
+        for field in (
+            "random_loss_forward_percent",
+            "random_loss_reverse_percent",
+            "jitter_ms",
+            "intentional_reordering_percent",
+        ):
+            if float(profile[field]) != 0:
+                raise MatrixError("Paper-v1 forbids configured {}".format(field))
 
     sensitivity = document.get("network_sensitivity", {})
     anchors = sensitivity.get("anchor_path_ids", [])
@@ -96,18 +103,8 @@ def load_matrix(path):
         raise MatrixError("canonical main matrix must plan 400 runs")
     if len(list(planned_sensitivity_runs(document))) != SENSITIVITY_RUN_COUNT:
         raise MatrixError("canonical sensitivity matrix must plan 120 runs")
-    appendix = document.get("optional_appendix_loss", {})
-    appendix_profiles = appendix.get("profile_ids", [])
-    if appendix.get("anchor_path_ids") != anchors:
-        raise MatrixError("optional loss appendix must use the two anchor paths")
-    if len(appendix_profiles) != 1 or any(
-        profile not in profile_ids for profile in appendix_profiles
-    ):
-        raise MatrixError("optional loss appendix requires one valid profile")
-    if not isinstance(appendix.get("repetitions"), int) or appendix["repetitions"] <= 0:
-        raise MatrixError("optional loss appendix repetitions must be positive")
-    if len(list(planned_optional_loss_runs(document))) != OPTIONAL_LOSS_RUN_COUNT:
-        raise MatrixError("optional loss appendix must plan 40 runs")
+    if "optional_appendix_loss" in document:
+        raise MatrixError("Paper-v1 forbids an active-loss appendix")
     return document
 
 
@@ -145,30 +142,6 @@ def planned_sensitivity_runs(matrix, repetitions=None):
         yield {
             "suite_id": sensitivity["suite_id"],
             "experiment_class": "network-sensitivity",
-            "network_profile_id": profile_id,
-            "path_id": path_id,
-            "policy_pair": list(policy_pair),
-            "policy_pair_id": pair_id,
-            "repetition": repetition,
-            "run_id": "{}--{}--{}--r{:02d}".format(
-                path_id, profile_id, pair_id, repetition
-            ),
-        }
-
-
-def planned_optional_loss_runs(matrix, repetitions=None):
-    appendix = matrix["optional_appendix_loss"]
-    count = repetitions or appendix["repetitions"]
-    for path_id, profile_id, policy_pair, repetition in itertools.product(
-        appendix["anchor_path_ids"],
-        appendix["profile_ids"],
-        POLICY_PAIRS,
-        range(1, count + 1),
-    ):
-        pair_id = "{}__{}".format(*policy_pair)
-        yield {
-            "suite_id": appendix["suite_id"],
-            "experiment_class": "optional-loss-appendix",
             "network_profile_id": profile_id,
             "path_id": path_id,
             "policy_pair": list(policy_pair),

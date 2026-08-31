@@ -12,10 +12,9 @@ from paper_v1.manifest import (
     new_manifest,
     transition,
 )
-from network.set_netem import _netem_clause, resolve_netem_parameters
+from network.set_netem import resolve_netem_parameters
 from paper_v1.matrix import (
     load_matrix,
-    planned_optional_loss_runs,
     planned_runs,
     planned_sensitivity_runs,
 )
@@ -41,12 +40,7 @@ class PaperV1Test(unittest.TestCase):
         self.assertEqual(len(list(planned_runs(matrix))), 400)
         self.assertEqual(len(list(planned_runs(matrix, repetitions=1))), 44)
         self.assertEqual(len(list(planned_sensitivity_runs(matrix))), 120)
-        self.assertEqual(len(list(planned_optional_loss_runs(matrix))), 40)
-        self.assertNotIn(
-            "loss0p1_20m_50ms_q0p5",
-            matrix["network_sensitivity"]["profile_ids"],
-        )
-        self.assertFalse(matrix["optional_appendix_loss"]["enabled_by_default"])
+        self.assertNotIn("optional_appendix_loss", matrix)
         self.assertTrue(all(item["protocol"] == "http3" for item in matrix["paths"]))
         self.assertEqual(
             sum(item["sender"] == "mvfst" for item in matrix["paths"]), 4
@@ -58,22 +52,19 @@ class PaperV1Test(unittest.TestCase):
             item["profile_id"]: item for item in matrix["network_profiles"]
         }
         expected_queues = {
-            "base_20m_50ms_q0p5_loss0": 125000,
-            "rtt10_20m_q0p5_loss0": 25000,
-            "rtt100_20m_q0p5_loss0": 250000,
-            "queue2_20m_50ms_loss0": 500000,
-            "loss0p1_20m_50ms_q0p5": 125000,
+            "base_20m_50ms_q0p5_loss0": 62500,
+            "rtt10_20m_q0p5_loss0": 12500,
+            "rtt100_20m_q0p5_loss0": 125000,
+            "queue2_20m_50ms_loss0": 250000,
         }
         for profile_id, queue_bytes in expected_queues.items():
             resolved = resolve_netem_parameters(profiles[profile_id])
             self.assertEqual(resolved["queue_size_bytes"], queue_bytes)
             self.assertFalse(resolved["reverse_bottleneck"])
             self.assertEqual(resolved["reverse_loss_percent"], 0)
-        self.assertEqual(
-            profiles["loss0p1_20m_50ms_q0p5"]["random_loss_forward_percent"],
-            0.1,
-        )
-        self.assertIn("loss random 0.1%", _netem_clause(25, loss_percent=0.1))
+            self.assertEqual(resolved["forward_loss_percent"], 0)
+            self.assertEqual(profiles[profile_id]["jitter_ms"], 0)
+            self.assertEqual(profiles[profile_id]["intentional_reordering_percent"], 0)
 
         legacy = resolve_netem_parameters(
             {"RTT_ms": 50, "bandwidth_Mbps": 20, "buffer_bdp": 0.5}

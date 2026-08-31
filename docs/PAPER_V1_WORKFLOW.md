@@ -14,9 +14,8 @@ Paper-v1 exporter.
   BBR. This produces 400 baseline-network runs.
 - Two anchor paths, three additional loss-free network profiles and five
   repetitions produce 120 core network-sensitivity runs.
-- A 40-run forward 0.1% random-loss suite is disabled by default and may be
-  used only as an optional appendix after the no-random-loss causal chain is
-  complete.
+- Every profile fixes configured loss, jitter and intentional reordering to
+  zero. Paper-v1 contains no active-loss appendix.
 - One 30 s run, 5–25 s measurement window, one shared server process/listening
   port, two independent client local ports/connections, one long H3 stream per
   connection and at least 1 GiB available per response.
@@ -30,8 +29,6 @@ cp configs/paper-v1/local.example.json /absolute/private/location/local.json
 scripts/paper_v1_plan --repetitions 1
 scripts/paper_v1_plan --suite sensitivity
 scripts/paper_v1_plan --suite all
-scripts/paper_v1_plan --suite appendix-loss
-scripts/paper_v1_plan --suite all-with-appendix
 scripts/paper_v1_preflight --local-config /absolute/private/location/local.json
 scripts/paper_v1_plan
 scripts/paper_v1_validate /absolute/path/to/one/attempt
@@ -41,15 +38,15 @@ scripts/paper_v1_export /absolute/path/to/dataset /absolute/new/export/path
 `plan --repetitions 1` prints the 44 Linux smoke attempts: one for each of
 11 paths × four policy pairs. It does not start them. The default full plan
 prints 400 baseline-network identities, `--suite sensitivity` prints 120, and
-the default core `--suite all` prints 520. The optional `--suite appendix-loss`
-prints 40; `--suite all-with-appendix` prints 560. Planning never starts
-collection implicitly.
+`--suite all` prints 520 (400 baseline plus 120 loss-free sensitivity runs).
+Planning never starts collection implicitly.
 
 The exact queue byte counts in `configs/paper-v1/matrix.json` are normative.
 The historical `q0p5`/`q2` strings are profile labels, not values that the
-runner may recompute from an implicit BDP convention. The reverse path has
-propagation delay but no bandwidth limiter. Random loss, when selected, is
-forward-only.
+runner may recompute from an implicit BDP convention. At 20 Mbps and 50 ms
+total RTT, 0.5 BDP is 62,500 bytes. The reverse path has propagation delay but
+no bandwidth limiter. Any configured loss, jitter, or intentional reordering
+is rejected before network setup.
 
 Build manifests are generated explicitly. mvfst-H3 needs an extra metadata
 file containing `application_identity`, `h3_adapter_kind`, `transport_commit`

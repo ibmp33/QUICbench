@@ -10,7 +10,6 @@ from paper_v1.export import export_dataset
 from paper_v1.io import atomic_write_json, load_json
 from paper_v1.matrix import (
     load_matrix,
-    planned_optional_loss_runs,
     planned_runs,
     planned_sensitivity_runs,
 )
@@ -32,7 +31,7 @@ def _parser():
     plan.add_argument("--repetitions", type=int)
     plan.add_argument(
         "--suite",
-        choices=("main", "sensitivity", "appendix-loss", "all", "all-with-appendix"),
+        choices=("main", "sensitivity", "all"),
         default="main",
     )
     plan.add_argument("--path-id")
@@ -83,12 +82,10 @@ def main(argv=None):
     if args.command == "plan":
         matrix = load_matrix(args.matrix)
         runs = []
-        if args.suite in ("main", "all", "all-with-appendix"):
+        if args.suite in ("main", "all"):
             runs.extend(planned_runs(matrix, args.repetitions))
-        if args.suite in ("sensitivity", "all", "all-with-appendix"):
+        if args.suite in ("sensitivity", "all"):
             runs.extend(planned_sensitivity_runs(matrix, args.repetitions))
-        if args.suite in ("appendix-loss", "all-with-appendix"):
-            runs.extend(planned_optional_loss_runs(matrix, args.repetitions))
         if args.path_id:
             runs = [run for run in runs if run["path_id"] == args.path_id]
         if args.run_id:

@@ -63,8 +63,14 @@ class NamespaceTopology:
         for key in required:
             if float(self.profile[key]) <= 0:
                 raise TopologyError("{} must be positive".format(key))
-        if float(self.profile.get("random_loss_reverse_percent", 0)) != 0:
-            raise TopologyError("Paper-v1 reverse random loss must be zero")
+        for key in (
+            "random_loss_forward_percent",
+            "random_loss_reverse_percent",
+            "jitter_ms",
+            "intentional_reordering_percent",
+        ):
+            if float(self.profile.get(key, 0)) != 0:
+                raise TopologyError("Paper-v1 forbids configured {}".format(key))
 
     @staticmethod
     def require_root():
@@ -126,9 +132,6 @@ class NamespaceTopology:
                  "root", "handle", "1:", "tbf", "rate", rate, "burst", str(burst), "limit", queue)
         forward = ["tc", "qdisc", "replace", "dev", self.router_client_interface, "root", "handle", "10:",
                    "netem", "delay", "{}ms".format(p["forward_delay_ms"])]
-        loss = float(p.get("random_loss_forward_percent", 0))
-        if loss:
-            forward.extend(["loss", "random", "{}%".format(loss)])
         forward.extend(["limit", "100000"])
         self._ns(self.router_namespace, *forward)
         self._ns(self.client_namespace, "tc", "qdisc", "replace", "dev", self.client_interface, "root",

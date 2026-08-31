@@ -9,9 +9,11 @@ BASE = {
     "forward_delay_ms": 25,
     "reverse_delay_ms": 25,
     "reverse_bottleneck": False,
-    "queue_size_bytes": 125000,
+    "queue_size_bytes": 62500,
     "random_loss_forward_percent": 0,
     "random_loss_reverse_percent": 0,
+    "jitter_ms": 0,
+    "intentional_reordering_percent": 0,
 }
 
 
@@ -40,20 +42,22 @@ class PaperV1TopologyTest(unittest.TestCase):
         self.assertEqual(all_tbf, forward_tbf)
         self.assertIn("root handle 1: tbf", forward_tbf[0])
         self.assertIn("rate 20mbit", forward_tbf[0])
-        self.assertIn("limit 125000", forward_tbf[0])
+        self.assertIn("limit 62500", forward_tbf[0])
         self.assertTrue(any("qb-router tc qdisc" in command and "delay 25ms" in command for command in joined))
         self.assertTrue(any("qb-client tc qdisc" in command and "delay 25ms" in command for command in joined))
         self.assertTrue(any("qb-router sysctl -q -w net.ipv4.ip_forward=1" in command for command in joined))
         self.assertTrue(any("qb-client ping -c 2" in command for command in joined))
 
-    def test_optional_loss_is_forward_only(self):
-        calls = []
-        profile = dict(BASE, random_loss_forward_percent=0.1)
-        topology = NamespaceTopology(profile, runner=lambda argv, **kwargs: calls.append(argv) or mock.Mock(stdout="[]"))
-        topology.apply_profile()
-        joined = [" ".join(command) for command in calls]
-        self.assertTrue(any("qb-router" in command and "loss random 0.1%" in command for command in joined))
-        self.assertFalse(any("qb-client" in command and "loss random" in command for command in joined))
+    def test_rejects_every_active_impairment(self):
+        for field, value in (
+            ("random_loss_forward_percent", 0.1),
+            ("random_loss_reverse_percent", 0.1),
+            ("jitter_ms", 1),
+            ("intentional_reordering_percent", 1),
+        ):
+            with self.subTest(field=field):
+                with self.assertRaises(TopologyError):
+                    NamespaceTopology(dict(BASE, **{field: value}))
 
 
 if __name__ == "__main__":
