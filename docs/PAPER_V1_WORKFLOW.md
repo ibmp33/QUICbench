@@ -32,6 +32,8 @@ scripts/paper_v1_plan --suite all
 scripts/paper_v1_preflight --local-config /absolute/private/location/local.json
 sudo -E scripts/paper_v1_smoke --local-config /absolute/private/location/local.json
 sudo -E scripts/paper_v1_corpus --local-config /absolute/private/location/formal.json \
+  --smoke-dataset-root /absolute/path/to/current-smoke-dataset --check-only
+sudo -E scripts/paper_v1_corpus --local-config /absolute/private/location/formal.json \
   --smoke-dataset-root /absolute/path/to/current-smoke-dataset --resume
 scripts/paper_v1_plan
 scripts/paper_v1_validate /absolute/path/to/one/attempt

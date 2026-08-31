@@ -48,7 +48,8 @@ def verify_smoke_gate(matrix, policy_spec, config, smoke_dataset_root, binary_ha
 
 def run_baseline_corpus(local_config_path, matrix_path, policy_spec_path,
                         smoke_dataset_root, resume=False, fail_fast=False,
-                        max_consecutive_failures=3, summary_path=None):
+                        max_consecutive_failures=3, summary_path=None,
+                        check_only=False):
     if max_consecutive_failures <= 0:
         raise CorpusError("max_consecutive_failures must be positive")
     preflight = run_preflight(local_config_path, matrix_path, policy_spec_path)
@@ -61,6 +62,16 @@ def run_baseline_corpus(local_config_path, matrix_path, policy_spec_path,
     )
     runs = list(planned_runs(matrix))
     dataset_root = os.path.abspath(config["dataset_root"])
+    if check_only:
+        return {
+            "status": "baseline_corpus_preflight_passed",
+            "all_valid": True,
+            "planned": len(runs),
+            "smoke_cells_verified": len(smoke_evidence),
+            "dataset_root": dataset_root,
+            "minimum_free_bytes": int(config["storage"]["minimum_free_bytes"]),
+            "static_preflight": preflight,
+        }
     if summary_path is None:
         report_dir = os.path.join(dataset_root, "_corpus_reports")
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")

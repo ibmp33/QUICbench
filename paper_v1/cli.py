@@ -75,6 +75,7 @@ def _parser():
     corpus.add_argument("--fail-fast", action="store_true")
     corpus.add_argument("--max-consecutive-failures", type=int, default=3)
     corpus.add_argument("--summary")
+    corpus.add_argument("--check-only", action="store_true")
 
     export = subparsers.add_parser("export")
     export.add_argument("dataset_dir")
@@ -143,6 +144,7 @@ def main(argv=None):
             fail_fast=args.fail_fast,
             max_consecutive_failures=args.max_consecutive_failures,
             summary_path=args.summary,
+            check_only=args.check_only,
         )
     elif args.command == "preflight":
         result = run_preflight(
