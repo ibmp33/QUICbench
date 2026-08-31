@@ -400,7 +400,7 @@ def _validate_network_evidence(artifacts, issues):
     except (OSError, json.JSONDecodeError) as error:
         issues.append(_issue("network_evidence_invalid", str(error), "network"))
         return {}
-    if evidence.get("schema_version") != "network-evidence-v1.0.0":
+    if evidence.get("schema_version") != "network-evidence-v1.1.0":
         issues.append(_issue("network_evidence_schema", repr(evidence), "network"))
     sources = evidence.get("source_artifact_sha256", {})
     for role in ("qdisc_before", "qdisc_active", "qdisc_after"):

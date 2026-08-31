@@ -291,7 +291,7 @@ class PaperV1Test(unittest.TestCase):
             "start_skew_valid": True,
         }
         atomic_write_json(files["network_evidence"], {
-            "schema_version": "network-evidence-v1.0.0",
+            "schema_version": "network-evidence-v1.1.0",
             "source_artifact_sha256": {role: sha256_file(files[role])
                                        for role in ("qdisc_before", "qdisc_active", "qdisc_after")},
             "conclusion": network_conclusion,

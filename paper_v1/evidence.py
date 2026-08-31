@@ -126,6 +126,44 @@ def _qdiscs(snapshot, role):
     return json.loads(snapshot[role]["qdisc_json"])
 
 
+def _qdisc_counter_deltas(before, active, after):
+    counters = ("bytes", "packets", "drops", "overlimits", "requeues")
+
+    def indexed(snapshot, role):
+        return {
+            (item.get("kind"), item.get("handle"), bool(item.get("root"))): item
+            for item in _qdiscs(snapshot, role)
+        }
+
+    def phase(start, end, role):
+        start_items = indexed(start, role)
+        end_items = indexed(end, role)
+        result = []
+        for identity in sorted(set(start_items) & set(end_items)):
+            start_item, end_item = start_items[identity], end_items[identity]
+            result.append({
+                "kind": identity[0],
+                "handle": identity[1],
+                "root": identity[2],
+                "delta": {
+                    name: int(end_item.get(name, 0)) - int(start_item.get(name, 0))
+                    for name in counters
+                },
+                "end_backlog_bytes": int(end_item.get("backlog", 0)),
+                "end_queue_length_packets": int(end_item.get("qlen", 0)),
+            })
+        return result
+
+    return {
+        role: {
+            "before_to_active": phase(before, active, role),
+            "active_to_after": phase(active, after, role),
+            "before_to_after": phase(before, after, role),
+        }
+        for role in ("bottleneck", "forward_delay", "reverse_delay")
+    }
+
+
 def _offloads_disabled(snapshot):
     required = ("tcp-segmentation-offload", "generic-segmentation-offload",
                 "generic-receive-offload", "large-receive-offload", "tx-udp-segmentation")
@@ -189,7 +227,7 @@ def derive_network(run_dir, manifest):
         "start_skew_valid": runtime["workload"]["start_skew_ns"] <= max_skew,
     }
     return {
-        "schema_version": "network-evidence-v1.0.0",
+        "schema_version": "network-evidence-v1.1.0",
         "source_artifact_sha256": {
             "qdisc_before": sha256_file(os.path.join(run_dir, "network-before.json")),
             "qdisc_active": sha256_file(os.path.join(run_dir, "network-active.json")),
@@ -200,6 +238,7 @@ def derive_network(run_dir, manifest):
                      "saturation_threshold": utilization_threshold,
                      "start_skew_ns": runtime["workload"]["start_skew_ns"],
                      "derived_bottleneck_queue_bytes": observed_queue_bytes,
+                     "qdisc_counter_deltas": _qdisc_counter_deltas(before, active, after),
                      "bottleneck_qdisc": tbf, "forward_delay_qdisc": forward_netem,
                      "reverse_delay_qdisc": reverse_netem},
         "conclusion": conclusion,

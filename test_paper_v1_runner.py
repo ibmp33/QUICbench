@@ -10,7 +10,12 @@ from paper_v1.runner import (
     _transport_log_path,
     validate_storage,
 )
-from paper_v1.evidence import derive_sender, measurement_window, saturation_threshold
+from paper_v1.evidence import (
+    _qdisc_counter_deltas,
+    derive_sender,
+    measurement_window,
+    saturation_threshold,
+)
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -105,6 +110,26 @@ class PaperV1RunnerTest(unittest.TestCase):
         durable_root = os.path.join("/private", "tmp", os.path.basename(self.temp.name))
         with self.assertRaisesRegex(RunError, "storage.minimum_free_bytes"):
             validate_storage({"dataset_root": durable_root}, smoke=False)
+
+    def test_qdisc_counter_deltas_are_derived_from_snapshots(self):
+        def snapshot(value):
+            qdisc = json.dumps([{
+                "kind": "tbf", "handle": "1:", "root": True,
+                "bytes": value * 100, "packets": value * 10,
+                "drops": value, "overlimits": value * 2,
+                "requeues": 0, "backlog": value * 3, "qlen": value,
+            }])
+            return {
+                role: {"qdisc_json": qdisc}
+                for role in ("bottleneck", "forward_delay", "reverse_delay")
+            }
+
+        deltas = _qdisc_counter_deltas(snapshot(1), snapshot(3), snapshot(6))
+        bottleneck = deltas["bottleneck"]
+        self.assertEqual(bottleneck["before_to_active"][0]["delta"]["drops"], 2)
+        self.assertEqual(bottleneck["active_to_after"][0]["delta"]["packets"], 30)
+        self.assertEqual(bottleneck["before_to_after"][0]["delta"]["bytes"], 500)
+        self.assertEqual(bottleneck["before_to_after"][0]["end_backlog_bytes"], 18)
 
     def test_transport_log_role_only_exists_for_log_derived_senders(self):
         self.assertIsNone(_transport_log_path("quic-go", self.temp.name))
