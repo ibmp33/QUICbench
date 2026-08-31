@@ -11,7 +11,7 @@ from paper_v1.runner import (
     validate_storage,
 )
 from paper_v1.smoke import SmokeSuiteError, _valid_existing_attempt, smoke_plan
-from paper_v1.build_identity import _toolchain_identity
+from paper_v1.build_identity import _toolchain_identity, git_identity
 from paper_v1.evidence import (
     _qdisc_counter_deltas,
     derive_sender,
@@ -150,6 +150,12 @@ class PaperV1RunnerTest(unittest.TestCase):
         if identity["cc"] is not None:
             self.assertTrue(identity["cc"]["path"].startswith("/"))
             self.assertIsInstance(identity["cc"]["version"], str)
+
+    def test_git_identity_returns_current_source_identity(self):
+        identity = git_identity(ROOT)
+        self.assertEqual(len(identity["commit"]), 40)
+        self.assertIn("source_tree_identity", identity)
+        self.assertIsInstance(identity["dirty"], bool)
 
     def test_smoke_resume_only_accepts_completed_valid_attempt(self):
         dataset = os.path.join(self.temp.name, "resume-dataset")

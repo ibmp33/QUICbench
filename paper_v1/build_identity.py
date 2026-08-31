@@ -59,6 +59,18 @@ def git_identity(repo):
         "tracked_diff_sha256": sha256_bytes(diff),
         "untracked_files": sorted(untracked),
     }
+    dirty_diff_sha256 = sha256_bytes(canonical_json_bytes(patch_identity))
+    return {
+        "repository": repo,
+        "commit": commit,
+        "branch": branch,
+        "dirty": bool(status),
+        "dirty_diff_sha256": dirty_diff_sha256,
+        "source_tree_identity": "{}{}".format(
+            commit, "+dirty:" + dirty_diff_sha256 if status else ""
+        ),
+        "status": status.splitlines(),
+    }
 
 
 def _toolchain_identity():
@@ -89,18 +101,6 @@ def _toolchain_identity():
             "exit_code": completed.returncode,
         }
     return result
-    dirty_diff_sha256 = sha256_bytes(canonical_json_bytes(patch_identity))
-    return {
-        "repository": repo,
-        "commit": commit,
-        "branch": branch,
-        "dirty": bool(status),
-        "dirty_diff_sha256": dirty_diff_sha256,
-        "source_tree_identity": "{}{}".format(
-            commit, "+dirty:" + dirty_diff_sha256 if status else ""
-        ),
-        "status": status.splitlines(),
-    }
 
 
 def create_build_manifest(
