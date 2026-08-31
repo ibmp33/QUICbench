@@ -11,6 +11,7 @@ from paper_v1.runner import (
     validate_storage,
 )
 from paper_v1.smoke import SmokeSuiteError, _valid_existing_attempt, smoke_plan
+from paper_v1.build_identity import _toolchain_identity
 from paper_v1.evidence import (
     _qdisc_counter_deltas,
     derive_sender,
@@ -141,6 +142,15 @@ class PaperV1RunnerTest(unittest.TestCase):
         with self.assertRaisesRegex(SmokeSuiteError, "unknown path IDs"):
             smoke_plan(self.runner.matrix, ["not-a-path"])
 
+    def test_build_identity_records_concrete_toolchain_versions(self):
+        identity = _toolchain_identity()
+        self.assertIn("platform", identity)
+        self.assertIn("python", identity)
+        self.assertIn("cc", identity)
+        if identity["cc"] is not None:
+            self.assertTrue(identity["cc"]["path"].startswith("/"))
+            self.assertIsInstance(identity["cc"]["version"], str)
+
     def test_smoke_resume_only_accepts_completed_valid_attempt(self):
         dataset = os.path.join(self.temp.name, "resume-dataset")
         run_id = "one-run"
@@ -165,6 +175,7 @@ class PaperV1RunnerTest(unittest.TestCase):
             json.dump({"status": "completed_valid", "smoke_valid": True}, artifact)
         manifest = {
             "state": "completed_valid",
+            "run_id": run_id,
             "requested": {
                 "sender": {"sender": "xquic", "cc": "cubic", "binary_sha256": "sender-hash"},
                 "receiver_binary_sha256": "receiver-hash",

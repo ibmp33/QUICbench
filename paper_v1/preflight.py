@@ -71,7 +71,11 @@ def run_preflight(local_config_path, matrix_path, policy_spec_path, allow_dirty=
     for name, path in config["binaries"].items():
         _absolute_file(path, "binary {}".format(name), executable=True)
     for name, path in config["tools"].items():
-        _absolute_file(path, "tool {}".format(name), executable=True)
+        if name.endswith("_image"):
+            if not isinstance(path, str) or not path:
+                raise PreflightError("tool {} image identity must be non-empty".format(name))
+        else:
+            _absolute_file(path, "tool {}".format(name), executable=True)
     builds = {}
     for name, path in config["build_manifests"].items():
         _absolute_file(path, "build manifest {}".format(name))

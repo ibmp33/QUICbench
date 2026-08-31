@@ -3,6 +3,7 @@
 import datetime
 import os
 import platform
+import shutil
 import subprocess
 
 from paper_v1.io import canonical_json_bytes, load_json, sha256_bytes, sha256_file
@@ -58,6 +59,36 @@ def git_identity(repo):
         "tracked_diff_sha256": sha256_bytes(diff),
         "untracked_files": sorted(untracked),
     }
+
+
+def _toolchain_identity():
+    commands = {
+        "cc": ("--version",),
+        "cmake": ("--version",),
+        "go": ("version",),
+        "rustc": ("--version",),
+        "cargo": ("--version",),
+        "openssl": ("version",),
+    }
+    result = {
+        "platform": platform.platform(),
+        "python": platform.python_version(),
+    }
+    for name, arguments in commands.items():
+        executable = shutil.which(name)
+        if executable is None:
+            result[name] = None
+            continue
+        completed = subprocess.run(
+            [executable, *arguments], check=False, capture_output=True, text=True
+        )
+        output = (completed.stdout or completed.stderr).strip().splitlines()
+        result[name] = {
+            "path": os.path.realpath(executable),
+            "version": output[0] if output else None,
+            "exit_code": completed.returncode,
+        }
+    return result
     dirty_diff_sha256 = sha256_bytes(canonical_json_bytes(patch_identity))
     return {
         "repository": repo,
@@ -93,10 +124,7 @@ def create_build_manifest(
         "component_id": component_id,
         **identity,
         "build_command": build_command,
-        "toolchain": {
-            "platform": platform.platform(),
-            "python": platform.python_version(),
-        },
+        "toolchain": _toolchain_identity(),
         "build_flags": build_flags,
         "build_timestamp": datetime.datetime.fromtimestamp(
             os.stat(binary).st_mtime, datetime.timezone.utc

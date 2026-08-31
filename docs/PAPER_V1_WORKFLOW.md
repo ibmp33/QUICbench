@@ -31,6 +31,8 @@ scripts/paper_v1_plan --suite sensitivity
 scripts/paper_v1_plan --suite all
 scripts/paper_v1_preflight --local-config /absolute/private/location/local.json
 sudo -E scripts/paper_v1_smoke --local-config /absolute/private/location/local.json
+sudo -E scripts/paper_v1_corpus --local-config /absolute/private/location/formal.json \
+  --smoke-dataset-root /absolute/path/to/current-smoke-dataset --resume
 scripts/paper_v1_plan
 scripts/paper_v1_validate /absolute/path/to/one/attempt
 scripts/paper_v1_export /absolute/path/to/dataset /absolute/new/export/path
@@ -49,6 +51,14 @@ It returns zero only when all 44 cells are valid. Use `--resume` after an
 interruption to skip cells that already have a `completed_valid` smoke attempt;
 use repeated `--path-id` arguments to test selected paths while developing.
 These attempts are always marked non-paper-eligible and cannot enter exports.
+
+`paper_v1_corpus` runs only the 400-run baseline corpus. Before creating its
+first attempt it requires clean, matching build manifests, non-volatile
+storage with the configured free-space reserve, and 44 current-identity smoke
+cells. Its incremental summary supports `--resume`; a three-consecutive-failure
+circuit breaker prevents an unattended machine-wide fault from producing
+hundreds of invalid attempts. Network sensitivity is deliberately a separate
+later stage.
 
 The exact queue byte counts in `configs/paper-v1/matrix.json` are normative.
 The historical `q0p5`/`q2` strings are profile labels, not values that the

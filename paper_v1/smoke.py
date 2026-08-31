@@ -51,7 +51,8 @@ def _smoke_identity(matrix, policy_spec, planned, binary_hashes):
     }
 
 
-def _valid_existing_attempt(dataset_root, run_id, expected):
+def _valid_existing_attempt(dataset_root, run_id, expected, require_smoke=True,
+                            require_paper_eligible=False):
     run_root = os.path.join(dataset_root, run_id)
     if not os.path.isdir(run_root):
         return None
@@ -81,13 +82,15 @@ def _valid_existing_attempt(dataset_root, run_id, expected):
             and flow.get("policy_spec_sha256") == policy["spec_sha256"]
             for flow, policy in zip(flows, expected["policies"])
         )
-        workload_matches = workload.get("smoke") is True and all(
+        workload_matches = workload.get("smoke") is require_smoke and all(
             workload.get(key) == value for key, value in expected["workload"].items()
         )
         if (
             result.get("status") == "completed_valid"
-            and result.get("smoke_valid") is True
+            and (result.get("smoke_valid") is True if require_smoke else True)
+            and (result.get("paper_eligible") is True if require_paper_eligible else True)
             and manifest.get("state") == "completed_valid"
+            and manifest.get("run_id") == run_id
             and requested.get("network_profile") == expected["network_profile"]
             and requested.get("receiver_binary_sha256") == expected["receiver_binary_sha256"]
             and sender_matches

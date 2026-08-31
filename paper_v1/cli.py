@@ -6,6 +6,7 @@ import os
 import sys
 
 from paper_v1.build_identity import create_build_manifest
+from paper_v1.corpus import run_baseline_corpus
 from paper_v1.export import export_dataset
 from paper_v1.io import atomic_write_json, load_json
 from paper_v1.matrix import (
@@ -65,6 +66,16 @@ def _parser():
     smoke.add_argument("--fail-fast", action="store_true")
     smoke.add_argument("--summary")
 
+    corpus = subparsers.add_parser("corpus")
+    corpus.add_argument("--local-config", required=True)
+    corpus.add_argument("--smoke-dataset-root", required=True)
+    corpus.add_argument("--matrix", default=DEFAULT_MATRIX)
+    corpus.add_argument("--policy-spec", default=DEFAULT_POLICY_SPEC)
+    corpus.add_argument("--resume", action="store_true")
+    corpus.add_argument("--fail-fast", action="store_true")
+    corpus.add_argument("--max-consecutive-failures", type=int, default=3)
+    corpus.add_argument("--summary")
+
     export = subparsers.add_parser("export")
     export.add_argument("dataset_dir")
     export.add_argument("output_dir")
@@ -122,6 +133,17 @@ def main(argv=None):
             fail_fast=args.fail_fast,
             summary_path=args.summary,
         )
+    elif args.command == "corpus":
+        result = run_baseline_corpus(
+            args.local_config,
+            args.matrix,
+            args.policy_spec,
+            args.smoke_dataset_root,
+            resume=args.resume,
+            fail_fast=args.fail_fast,
+            max_consecutive_failures=args.max_consecutive_failures,
+            summary_path=args.summary,
+        )
     elif args.command == "preflight":
         result = run_preflight(
             args.local_config,
@@ -150,7 +172,7 @@ def main(argv=None):
     else:
         raise AssertionError(args.command)
     print(json.dumps(result, indent=2, sort_keys=True))
-    if args.command == "smoke":
+    if args.command in ("smoke", "corpus"):
         return 0 if result["all_valid"] else 1
     if args.command == "run" and args.smoke:
         return 0 if result.get("smoke_valid") else 2
