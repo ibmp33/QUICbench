@@ -204,6 +204,7 @@ class PaperV1Test(unittest.TestCase):
             "h3_adapter_kind": "minimal-native-h3",
             "h3_adapter_patch_sha256": "a" * 64,
             "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
+            "raw_runtime_sha256": sha256_file(files["sender_runtime_raw"]),
         }
         with open(files["sender_runtime"], "w", encoding="utf-8") as artifact:
             artifact.write(json.dumps(sender_runtime) + "\n")

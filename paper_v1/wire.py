@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import time
 
 from paper_v1.io import atomic_write_json, sha256_file
 
@@ -59,6 +60,21 @@ def _tool_command(tshark, *arguments):
     return prefix + list(arguments)
 
 
+def _parse_pcap_ack_rows(output):
+    result = []
+    for line in output.splitlines():
+        columns = line.split("\t")
+        if len(columns) != 3:
+            continue
+        times = [columns[0]]
+        largest = columns[1].split(",")
+        delays = columns[2].split(",")
+        for index, value in enumerate(largest):
+            result.append({"time_ns": round(float(times[0]) * 1_000_000_000), "largest": int(value),
+                           "ack_delay_ns": int(delays[index]) * 8_000})
+    return result
+
+
 def _pcap_acks(tshark, pcap, keylog, local_port):
     # Wireshark 3.6 can associate simultaneous QUIC handshakes incorrectly
     # when only one connection's TLS secrets are supplied. Slice by the
@@ -72,18 +88,19 @@ def _pcap_acks(tshark, pcap, keylog, local_port):
                "-T", "fields", "-E", "separator=/t", "-E", "occurrence=a",
                "-e", "frame.time_epoch", "-e", "quic.ack.largest_acknowledged", "-e", "quic.ack.ack_delay")
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
-    result = []
-    for line in completed.stdout.splitlines():
-        columns = line.split("\t")
-        if len(columns) != 3:
-            continue
-        times = [columns[0]]
-        largest = columns[1].split(",")
-        delays = columns[2].split(",")
-        for index, value in enumerate(largest):
-            result.append({"time_ns": round(float(times[0]) * 1_000_000_000), "largest": int(value),
-                           "ack_delay_ns": int(delays[index]) * 8_000})
-    return result, [filter_command, command]
+    result = _parse_pcap_ack_rows(completed.stdout)
+    commands = [filter_command, command]
+    # Docker bind mounts have occasionally returned no decrypted rows on the
+    # first read of a freshly generated per-flow capture, while the immutable
+    # inputs decrypt normally immediately afterwards. One identical retry is
+    # evidence-preserving: both invocations are recorded and an empty retry
+    # still fails closed.
+    if not result:
+        time.sleep(0.1)
+        completed = subprocess.run(command, check=True, capture_output=True, text=True)
+        commands.append(command)
+        result = _parse_pcap_ack_rows(completed.stdout)
+    return result, commands
 
 
 def _align_pcap(qlog, pcap):

@@ -395,6 +395,7 @@ class PaperV1Runner:
             "sender_qlog": server_qlog_archive if os.path.getsize(server_qlog_archive) > 10240 else None,
             "sender_runtime": os.path.join(run_dir, "sender-runtime.jsonl"),
             "sender_runtime_raw": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
+            "sender_transport_log": os.path.join(run_dir, "xquic-server.slog"),
             "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
             "network_evidence": os.path.join(run_dir, "network-evidence.json"),
             "wire_evidence": os.path.join(run_dir, "wire-evidence.json"),

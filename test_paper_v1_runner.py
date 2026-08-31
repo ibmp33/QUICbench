@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from paper_v1.runner import PaperV1Runner, _path_for_run
-from paper_v1.evidence import saturation_threshold
+from paper_v1.evidence import derive_sender, saturation_threshold
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -71,6 +71,27 @@ class PaperV1RunnerTest(unittest.TestCase):
     def test_smoke_gate_does_not_change_paper_admission_threshold(self):
         self.assertEqual(saturation_threshold(True), 0.85)
         self.assertEqual(saturation_threshold(False), 0.90)
+
+    def test_xquic_sender_identity_is_derived_from_transport_log(self):
+        raw = os.path.join(self.temp.name, "sender-runtime-initial.jsonl")
+        with open(raw, "w", encoding="utf-8") as artifact:
+            artifact.write('{"event":"sender_initialized"}\n')
+        slog = os.path.join(self.temp.name, "xquic-server.slog")
+        event = (
+            "|paper_v1_transport_initialized|active_cc:bbr|configured_pacing:0|"
+            "effective_pacing:1|pacer_initialized:1|initial_cwnd_packets:32|\n"
+        )
+        with open(slog, "w", encoding="utf-8") as artifact:
+            artifact.write(event + event + "|PACING timer update|delay:1000|\n")
+        result = derive_sender(self.temp.name, {"requested": {"sender": {
+            "sender": "xquic", "cc": "bbr-family", "binary_sha256": "a" * 64,
+        }}})
+        self.assertEqual(result["active_cc"], "bbr")
+        self.assertFalse(result["fallback"])
+        self.assertEqual(result["configured_pacing"], "off")
+        self.assertEqual(result["effective_pacing"], "paced")
+        self.assertTrue(result["pacing_callback_or_tick_observed"])
+        self.assertEqual(result["direct_event_counts"]["transport_initialized"], 2)
 
 
 if __name__ == "__main__":

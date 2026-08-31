@@ -38,6 +38,7 @@ REQUIRED_ARTIFACT_ROLES = {
     "client_stderr_flow_b",
     "capture_stderr",
     "sender_runtime",
+    "sender_runtime_raw",
     "runtime_evidence",
     "network_evidence",
     "wire_evidence",
@@ -309,6 +310,12 @@ def _validate_sender_runtime(manifest, artifacts, issues):
     requested_sender = manifest.get("requested", {}).get("sender", {})
     if reported.get("binary_sha256") != requested_sender.get("binary_sha256"):
         issues.append(_issue("sender_binary_identity", repr(reported), "sender_identity"))
+    source_roles = {"raw_runtime_sha256": "sender_runtime_raw"}
+    if requested_sender.get("sender") == "xquic":
+        source_roles["transport_log_sha256"] = "sender_transport_log"
+    for field, role in source_roles.items():
+        if role not in artifacts or reported.get(field) != artifacts[role].get("sha256"):
+            issues.append(_issue("sender_source_identity", role, "sender_identity"))
     if requested_sender.get("sender") == "mvfst":
         for field in (
             "h3_adapter_identity",

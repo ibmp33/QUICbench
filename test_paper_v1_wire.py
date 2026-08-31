@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from paper_v1.wire import _align_pcap, _qlog_acks, _tool_command
+from paper_v1.wire import _align_pcap, _parse_pcap_ack_rows, _qlog_acks, _tool_command
 
 
 class PaperV1WireTest(unittest.TestCase):
@@ -36,6 +36,11 @@ class PaperV1WireTest(unittest.TestCase):
             ]
             aligned = _align_pcap(qlog, pcap)
             self.assertEqual([item["time_ns"] for item in aligned], [2, 3])
+
+    def test_pcap_parser_handles_coalesced_ack_fields(self):
+        rows = _parse_pcap_ack_rows("1.250000000\t7,6\t2,3\n")
+        self.assertEqual([item["largest"] for item in rows], [7, 6])
+        self.assertEqual([item["ack_delay_ns"] for item in rows], [16000, 24000])
 
 
 if __name__ == "__main__":

@@ -197,6 +197,47 @@ def derive_sender(run_dir, manifest):
     if not os.path.isfile(raw_path) or os.path.getsize(raw_path) == 0:
         return None
     events = _jsonl(raw_path)
+    if requested["sender"] == "xquic":
+        transport_path = os.path.join(run_dir, "xquic-server.slog")
+        if not os.path.isfile(transport_path) or os.path.getsize(transport_path) == 0:
+            return None
+        with open(transport_path, encoding="utf-8", errors="replace") as source:
+            transport_log = source.read()
+        initialized = re.findall(
+            r"paper_v1_transport_initialized\|active_cc:([^|]+)\|"
+            r"configured_pacing:([01])\|effective_pacing:([01])\|"
+            r"pacer_initialized:1\|initial_cwnd_packets:(\d+)\|",
+            transport_log,
+        )
+        active = {item[0] for item in initialized}
+        configured = {item[1] for item in initialized}
+        effective = {item[2] for item in initialized}
+        icws = {int(item[3]) for item in initialized}
+        if len(initialized) < 2 or any(len(values) != 1 for values in (active, configured, effective, icws)):
+            return None
+        active_cc = next(iter(active))
+        requested_cc = requested["cc"]
+        cc_matches = active_cc == requested_cc or (
+            requested_cc == "bbr-family" and active_cc in {"bbr", "bbr1", "bbr2", "bbr2modular"}
+        )
+        timer_updates = transport_log.count("|PACING timer update|")
+        final = {
+            "schema_version": "sender-runtime-v1.0.0", "event": "sender_final",
+            "sender": "xquic", "active_cc": active_cc, "fallback": not cc_matches,
+            "configured_pacing": "on" if next(iter(configured)) == "1" else "off",
+            "effective_pacing": "paced" if next(iter(effective)) == "1" else "unpaced",
+            "pacer_initialized": True,
+            "pacing_callback_or_tick_observed": timer_updates > 0,
+            "icw": next(iter(icws)), "binary_sha256": requested["binary_sha256"],
+            "direct_event_counts": {"transport_initialized": len(initialized),
+                                    "pacing_timer_update": timer_updates},
+            "raw_runtime_sha256": sha256_file(raw_path),
+            "transport_log_sha256": sha256_file(transport_path),
+        }
+        final_path = os.path.join(run_dir, "sender-runtime.jsonl")
+        with open(final_path, "w", encoding="utf-8") as artifact:
+            artifact.write(json.dumps(final, sort_keys=True) + "\n")
+        return final
     if requested["sender"] != "quic-go":
         return None
     controllers = [event for event in events if event.get("event") == "controller_initialized"]
