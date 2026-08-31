@@ -1,0 +1,48 @@
+{
+  "dataset_root": "/absolute/path/to/paper-v1-datasets",
+  "repositories": {
+    "quicbench": "/absolute/path/to/QUICbench",
+    "quic-go": "/absolute/path/to/quic-go-ack-policies",
+    "quiche": "/absolute/path/to/quiche",
+    "xquic": "/absolute/path/to/xquic",
+    "mvfst": "/absolute/path/to/mvfst",
+    "proxygen": "/absolute/path/to/proxygen"
+  },
+  "binaries": {
+    "receiver": "/absolute/path/to/quic-go-policy-client",
+    "quic-go": "/absolute/path/to/quic-go-server",
+    "quiche": "/absolute/path/to/quiche-server",
+    "xquic": "/absolute/path/to/test_server",
+    "mvfst-h3": "/absolute/path/to/hq"
+  },
+  "tools": {
+    "python": "/usr/bin/python3",
+    "tcpdump": "/usr/bin/tcpdump",
+    "tshark": "/usr/bin/tshark",
+    "tc": "/usr/sbin/tc",
+    "ip": "/usr/sbin/ip"
+  },
+  "network": {
+    "server_ip": "198.19.0.2",
+    "server_namespace": "quicbench-server",
+    "client_namespace": "quicbench-client",
+    "capture_interface": "ifb0",
+    "host_interface": "veth-host",
+    "server_port": 4433,
+    "client_local_ports": [54433, 54434],
+    "maximum_start_skew_ms": 20
+  },
+  "build_manifests": {
+    "receiver": "/absolute/path/to/build-manifests/receiver.json",
+    "quic-go": "/absolute/path/to/build-manifests/quic-go.json",
+    "quiche": "/absolute/path/to/build-manifests/quiche.json",
+    "xquic": "/absolute/path/to/build-manifests/xquic.json",
+    "mvfst-h3": "/absolute/path/to/build-manifests/mvfst-h3.json"
+  },
+  "mvfst_h3": {
+    "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
+    "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a",
+    "adapter_identity": "mvfst + paper-v1 H3 adapter",
+    "adapter_patch_sha256": "replace-with-verified-64-character-lowercase-sha256"
+  }
+}

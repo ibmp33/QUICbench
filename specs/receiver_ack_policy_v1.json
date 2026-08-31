@@ -1,0 +1,125 @@
+{
+  "policy_schema": "receiver-ack-policy-v1.0.0",
+  "event_schema": "receiver-ack-event-v1.0.0",
+  "paper_language": "Neqo-inspired and Chromium-inspired modeled receiver ACK policies",
+  "policies": {
+    "neqo-like-ack": {
+      "canonical_name": "neqo-like-ack",
+      "policy_version": "1.0.0",
+      "reference": {
+        "repository": "https://github.com/mozilla/neqo",
+        "commit": "e2a2a7459b8b51778b50209251a61fc5ca020893",
+        "file": "neqo-transport/src/tracking.rs",
+        "symbols": [
+          "DEFAULT_LOCAL_ACK_DELAY",
+          "DEFAULT_ACK_PACKET_TOLERANCE",
+          "RecvdPackets::new",
+          "RecvdPackets::ack_now",
+          "RecvdPackets::set_received",
+          "RecvdPackets::immediate_ack"
+        ]
+      },
+      "modeled_scope": "receiver ACK generation for one QUIC connection; explicit application-data state plus immediate Initial and Handshake ACKs",
+      "state_scope": "per-connection-per-packet-number-space",
+      "packet_number_spaces": {
+        "initial": {
+          "state": "immediate",
+          "threshold": 1,
+          "ack_delay_us": 0
+        },
+        "handshake": {
+          "state": "immediate",
+          "threshold": 1,
+          "ack_delay_us": 0
+        },
+        "application_data": {
+          "initial_state": "application-delayed-ack",
+          "states": ["application-delayed-ack"],
+          "zero_rtt_and_one_rtt_share_space": true
+        }
+      },
+      "ack_eliciting_definition": "quic-go transport frames other than ACK, PADDING, and CONNECTION_CLOSE; packets containing any other frame are ACK-eliciting",
+      "parameters": {
+        "initial_threshold": 2,
+        "steady_threshold": 2,
+        "threshold_transition": "none",
+        "transition_counter": "none",
+        "transition_boundary": "none",
+        "local_max_ack_delay_us": 20000,
+        "rtt_deadline": "min(first-pending-ack-eliciting-receive-time+20ms,last-ACK-send-time+smoothed-RTT) when last ACK and SRTT exist",
+        "out_of_order_immediate_ack": "packet-number is not the next in-order application packet number",
+        "previously_reported_missing_immediate_ack": true,
+        "ecn_ce_additional_immediate_ack": false,
+        "state_reset": "new connection creates new trackers; no modeled migration reset within a connection",
+        "ack_frequency_override": "forbidden in paper-v1"
+      },
+      "implemented_frame_specific_immediate_ack": [],
+      "unsupported_native_behavior": [
+        "Neqo frame-specific immediate-ACK decisions such as PING are not separately modeled because quic-go supplies packet-level ACK-eliciting metadata rather than the pinned Neqo frame classification at this decision point",
+        "native Firefox preferences, release channel configuration, and browser scheduling",
+        "Neqo ACK range retention and ACK encoding implementation details"
+      ],
+      "parameter_schema_sha256": "56f40fb165d89d8f8f2074c5e843c840cdc77e4f1e89f4147a0d7fe970bc2042"
+    },
+    "chrome-like-ack": {
+      "canonical_name": "chrome-like-ack",
+      "policy_version": "1.0.0",
+      "reference": {
+        "repository": "https://github.com/google/quiche",
+        "commit": "38097a7a48d5f7d0853ec0ece88269c08283c9c7",
+        "files": [
+          "quiche/quic/core/quic_received_packet_manager.cc",
+          "quiche/quic/core/quic_received_packet_manager.h",
+          "quiche/quic/core/quic_constants.h"
+        ],
+        "symbols": [
+          "QuicReceivedPacketManager::MaybeEnableAckDecimation",
+          "QuicReceivedPacketManager::GetMaxAckDelay",
+          "QuicReceivedPacketManager::MaybeUpdateAckTimeout",
+          "QuicReceivedPacketManager::HasNewMissingPackets"
+        ]
+      },
+      "modeled_scope": "receiver ACK generation for one QUIC connection using pinned QUICHE default application-data ACK decimation behavior; not a Chrome browser claim",
+      "state_scope": "per-connection-per-packet-number-space",
+      "packet_number_spaces": {
+        "initial": {
+          "state": "immediate",
+          "threshold": 1,
+          "ack_delay_us": 0
+        },
+        "handshake": {
+          "state": "immediate",
+          "threshold": 1,
+          "ack_delay_us": 0
+        },
+        "application_data": {
+          "initial_state": "initial-ack-every-2",
+          "steady_state": "decimated-ack-every-10",
+          "zero_rtt_and_one_rtt_share_space": true
+        }
+      },
+      "ack_eliciting_definition": "quic-go transport frames other than ACK, PADDING, and CONNECTION_CLOSE; packets containing any other frame are ACK-eliciting",
+      "parameters": {
+        "initial_threshold": 2,
+        "steady_threshold": 10,
+        "transition_counter": "application-data ACK-eliciting packet-number position relative to the least-observed application packet number; not received-packet count or ACK count",
+        "transition_boundary": "observed_ack_eliciting_pn >= least_observed_application_pn + 100",
+        "boundary_packet_uses": "new steady state threshold and timer",
+        "transition_direction": "one-way exactly once per connection",
+        "initial_max_ack_delay_us": 25000,
+        "steady_max_ack_delay": "max(1ms,min(25ms,minRTT/4))",
+        "new_gap_immediate_ack_scope": "first four received packets in the newest packet-number range after a gap",
+        "previously_reported_missing_immediate_ack": false,
+        "ecn_ce_immediate_ack": "only on transition from non-CE to CE",
+        "state_reset": "new connection creates new trackers; no modeled migration reset within a connection",
+        "ack_frequency_override": "forbidden in paper-v1"
+      },
+      "unsupported_native_behavior": [
+        "QUICHE connection options for 1/8 RTT delay, unlimited ACK decimation, and one-immediate-ACK modes",
+        "native Chrome field trials, browser process scheduling, and release configuration",
+        "QUICHE crypto packet-number-space delayed ACK implementation details because paper-v1 intentionally uses immediate Initial and Handshake ACKs"
+      ],
+      "parameter_schema_sha256": "f52216cf3261e0ae2e119fccc3d54d701574aa86585d264cc76f44cf45a58c43"
+    }
+  }
+}

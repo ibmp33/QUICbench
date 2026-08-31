@@ -1,33 +1,59 @@
 {
-    "schema_version": 1,
+    "schema_version": 2,
     "policies": {
-        "fixed2": {
+        "synthetic-fixed-ack-2": {
+            "policy_name": "synthetic-fixed-ack-2",
+            "policy_version": "1.0.0",
+            "state_scope": "per-connection",
             "initial_threshold": 2,
             "steady_threshold": 2,
             "max_ack_delay_ms": 25,
             "timer_rule": "max_ack_delay",
-            "reordering_ack": "immediate"
+            "reordering_ack": "immediate",
+            "classification": "synthetic-debug-only"
         },
-        "fixed10": {
+        "synthetic-fixed-ack-10": {
+            "policy_name": "synthetic-fixed-ack-10",
+            "policy_version": "1.0.0",
+            "state_scope": "per-connection",
             "initial_threshold": 10,
             "steady_threshold": 10,
             "max_ack_delay_ms": 25,
             "timer_rule": "max_ack_delay",
-            "reordering_ack": "immediate"
+            "reordering_ack": "immediate",
+            "classification": "synthetic-debug-only"
         },
-        "neqo": {
-            "threshold": 2,
+        "neqo-like-ack": {
+            "policy_name": "neqo-like-ack",
+            "policy_version": "1.0.0",
+            "reference": "https://github.com/mozilla/neqo/blob/e2a2a7459b8b51778b50209251a61fc5ca020893/neqo-transport/src/tracking.rs",
+            "reference_commit": "e2a2a7459b8b51778b50209251a61fc5ca020893",
+            "state_scope": "per-connection-per-packet-number-space",
+            "initial_threshold": 2,
+            "steady_threshold": 2,
+            "threshold_transition": "none_without_ack_frequency",
+            "packet_number_spaces": {"initial": "immediate", "handshake": "immediate", "application_data": "delayed"},
             "max_ack_delay_ms": 20,
-            "timer_rule": "max_ack_delay",
-            "reordering_ack": "immediate"
+            "timer_rule": "first_pending_ack_eliciting_packet+20ms; also eligible at last_ack+smoothed_rtt",
+            "immediate_ack_conditions": ["application packet number is not next in order", "threshold", "IMMEDIATE_ACK frame when explicitly negotiated"],
+            "reordering_ack": "immediate",
+            "ecn_ce_ack": "no additional immediate ACK"
         },
-        "chromium": {
+        "chrome-like-ack": {
+            "policy_name": "chrome-like-ack",
+            "policy_version": "1.0.0",
+            "reference": "https://github.com/google/quiche/blob/38097a7a48d5f7d0853ec0ece88269c08283c9c7/quiche/quic/core/quic_received_packet_manager.cc",
+            "reference_commit": "38097a7a48d5f7d0853ec0ece88269c08283c9c7",
+            "state_scope": "per-connection-per-packet-number-space",
             "initial_threshold": 2,
             "steady_threshold": 10,
-            "switch_after_packets": 100,
+            "switch_after_packet_number_advance": 100,
+            "transition_boundary": "ack_instigating_pn>=least_observed_pn+100",
+            "packet_number_spaces": {"initial": "immediate", "handshake": "immediate", "application_data": "ack-decimation"},
             "max_ack_delay_ms": 25,
-            "timer_rule": "max(1ms,min(max_ack_delay,min_rtt/4))",
-            "reordering_ack": "immediate"
+            "timer_rule": "initial:25ms; steady:max(1ms,min(25ms,min_rtt/4))",
+            "immediate_ack_conditions": ["threshold", "first four packets in newest range after a gap", "ECN transition to CE", "IMMEDIATE_ACK frame when explicitly negotiated"],
+            "reordering_ack": "threshold 1 plus new-gap rule"
         }
     }
 }

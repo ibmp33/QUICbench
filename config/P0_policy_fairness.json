@@ -76,7 +76,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -85,7 +85,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
@@ -99,7 +99,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -108,7 +108,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
@@ -122,7 +122,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -131,7 +131,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
@@ -145,7 +145,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -154,103 +154,11 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
                     "role": "baseline"
-                }
-            ]
-        },
-        {
-            "name": "P5_fixed2_vs_fixed2",
-            "flows": [
-                {
-                    "flow_id": "flow_a",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed2",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54433,
-                    "role": "baseline"
-                },
-                {
-                    "flow_id": "flow_b",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed2",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54434,
-                    "role": "baseline"
-                }
-            ]
-        },
-        {
-            "name": "P6_fixed10_vs_fixed10",
-            "flows": [
-                {
-                    "flow_id": "flow_a",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed10",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54433,
-                    "role": "baseline"
-                },
-                {
-                    "flow_id": "flow_b",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed10",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54434,
-                    "role": "baseline"
-                }
-            ]
-        },
-        {
-            "name": "P7_fixed2_vs_fixed10",
-            "flows": [
-                {
-                    "flow_id": "flow_a",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed2",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54433,
-                    "role": "test"
-                },
-                {
-                    "flow_id": "flow_b",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed10",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54434,
-                    "role": "test"
-                }
-            ]
-        },
-        {
-            "name": "P8_fixed10_vs_fixed2",
-            "flows": [
-                {
-                    "flow_id": "flow_a",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed10",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54433,
-                    "role": "test"
-                },
-                {
-                    "flow_id": "flow_b",
-                    "stack_name": "quic-go-policy",
-                    "ack_policy": "fixed2",
-                    "cc_algo": "cubic",
-                    "port_no": "4433",
-                    "local_port": 54434,
-                    "role": "test"
                 }
             ]
         }

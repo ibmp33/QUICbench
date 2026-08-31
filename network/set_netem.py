@@ -1,6 +1,67 @@
 import subprocess
 from operator import itemgetter
 
+
+def _netem_clause(delay_ms, jitter_ms=0, loss_percent=0, reorder_percent=0):
+    clause = "delay {}ms".format(delay_ms)
+    if float(jitter_ms) > 0:
+        clause += " {}ms distribution normal".format(jitter_ms)
+    if float(loss_percent) > 0:
+        clause += " loss random {}%".format(loss_percent)
+    if float(reorder_percent) > 0:
+        clause += " reorder {}%".format(reorder_percent)
+    return clause
+
+
+def resolve_netem_parameters(netem_conf):
+    """Resolve an explicit Paper-v1 profile or a legacy RTT/BDP profile."""
+    explicit_profile = "queue_size_bytes" in netem_conf
+    if explicit_profile:
+        forward_delay_ms = float(netem_conf["forward_delay_ms"])
+        reverse_delay_ms = float(netem_conf["reverse_delay_ms"])
+        bandwidth_mbps = float(netem_conf["forward_bandwidth_mbps"])
+        queue_size_bytes = int(netem_conf["queue_size_bytes"])
+    else:
+        rtt_ms, bandwidth_mbps, buffer_bdp = itemgetter(
+            "RTT_ms", "bandwidth_Mbps", "buffer_bdp"
+        )(netem_conf)
+        forward_delay_ms = float(rtt_ms) / 2.0
+        reverse_delay_ms = float(rtt_ms) / 2.0
+        bandwidth_mbps = float(bandwidth_mbps)
+        queue_size_bytes = int(
+            float(rtt_ms) * bandwidth_mbps * 1000 / 8 * float(buffer_bdp)
+        )
+    if min(forward_delay_ms, reverse_delay_ms, bandwidth_mbps, queue_size_bytes) <= 0:
+        raise ValueError("delay, bandwidth and queue size must be positive")
+    return {
+        "forward_delay_ms": forward_delay_ms,
+        "reverse_delay_ms": reverse_delay_ms,
+        "bandwidth_mbps": bandwidth_mbps,
+        "queue_size_bytes": queue_size_bytes,
+        "forward_jitter_ms": float(netem_conf.get("jitter_ms", 0)) / 2.0,
+        "reverse_jitter_ms": float(
+            netem_conf.get(
+                "reverse_jitter_ms",
+                0 if explicit_profile else netem_conf.get("jitter_ms", 0),
+            )
+        ) / 2.0,
+        "forward_loss_percent": float(
+            netem_conf.get("random_loss_forward_percent", 0)
+        ),
+        "reverse_loss_percent": float(
+            netem_conf.get("random_loss_reverse_percent", 0)
+        ),
+        "forward_reorder_percent": float(
+            netem_conf.get("intentional_reordering_percent", 0)
+        ),
+        "reverse_reorder_percent": float(
+            netem_conf.get("intentional_reordering_reverse_percent", 0)
+        ),
+        "reverse_bottleneck": bool(
+            netem_conf.get("reverse_bottleneck", not explicit_profile)
+        ),
+    }
+
 # for introducing delay for ingress packets
 def run_local_sudo(cmd):
     subprocess.run(["sudo", "bash", "-lc", cmd], check=True)
@@ -57,10 +118,9 @@ def set_netem(server_hostname, server_pw_path, server_ip, interface, ingress_int
     subprocess.run(["sudo", "tc", "qdisc", "del", "dev", interface, "handle", "ffff:", "ingress"], stderr=subprocess.DEVNULL)
     subprocess.run(["sudo", "tc", "qdisc", "del", "dev", ingress_interface, "root"], stderr=subprocess.DEVNULL)
 
-    RTT_ms, bandwidth_Mbps, buffer_bdp = itemgetter("RTT_ms", "bandwidth_Mbps", "buffer_bdp")(netem_conf)
-    jitter_ms = float(netem_conf.get("jitter_ms", 0))
-    reverse_jitter_ms = float(netem_conf.get("reverse_jitter_ms", jitter_ms))
-    reverse_bottleneck = bool(netem_conf.get("reverse_bottleneck", True))
+    parameters = resolve_netem_parameters(netem_conf)
+    bandwidth_Mbps = parameters["bandwidth_mbps"]
+    reverse_bottleneck = parameters["reverse_bottleneck"]
 
     if virtual_interface:
         add_virtual_interface(server_hostname, server_pw_path, server_ip, interface, virtual_interface)
@@ -68,18 +128,23 @@ def set_netem(server_hostname, server_pw_path, server_ip, interface, ingress_int
     ensure_ifb_interface(ingress_interface)
     add_ingress_interface(server_hostname, server_pw_path, interface, ingress_interface)
 
-    delay_ms = RTT_ms // 2
-    jitter_one_way_ms = jitter_ms / 2.0
-    reverse_jitter_one_way_ms = reverse_jitter_ms / 2.0
-    buffer_bytes = int(RTT_ms * bandwidth_Mbps * 1000 / 8 * buffer_bdp)
+    buffer_bytes = parameters["queue_size_bytes"]
     bandwidth_Kbps = bandwidth_Mbps * 1000
     burst_bytes = int(bandwidth_Mbps * 1000000 / 250 / 8) # https://unix.stackexchange.com/questions/100785/bucket-size-in-tbf
-    forward_delay_clause = "delay {}ms".format(delay_ms)
-    if jitter_one_way_ms > 0:
-        forward_delay_clause = "delay {}ms {}ms distribution normal".format(delay_ms, jitter_one_way_ms)
-    reverse_delay_clause = "delay {}ms".format(delay_ms)
-    if reverse_jitter_one_way_ms > 0:
-        reverse_delay_clause = "delay {}ms {}ms distribution normal".format(delay_ms, reverse_jitter_one_way_ms)
+    if buffer_bytes <= burst_bytes:
+        raise ValueError("queue_size_bytes must exceed the TBF burst size")
+    forward_delay_clause = _netem_clause(
+        parameters["forward_delay_ms"],
+        parameters["forward_jitter_ms"],
+        parameters["forward_loss_percent"],
+        parameters["forward_reorder_percent"],
+    )
+    reverse_delay_clause = _netem_clause(
+        parameters["reverse_delay_ms"],
+        parameters["reverse_jitter_ms"],
+        parameters["reverse_loss_percent"],
+        parameters["reverse_reorder_percent"],
+    )
 
     reverse_qdisc_cmd = "tc qdisc add dev {interface} root handle 1:0 netem {reverse_delay_clause} limit 12500;".format(
         interface=interface, reverse_delay_clause=reverse_delay_clause

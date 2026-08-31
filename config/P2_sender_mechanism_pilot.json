@@ -47,7 +47,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -56,7 +56,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
@@ -70,7 +70,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -79,7 +79,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
@@ -93,7 +93,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -102,7 +102,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,
@@ -116,7 +116,7 @@
                 {
                     "flow_id": "flow_a",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "chromium",
+                    "ack_policy": "chrome-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54433,
@@ -125,7 +125,7 @@
                 {
                     "flow_id": "flow_b",
                     "stack_name": "quic-go-policy",
-                    "ack_policy": "neqo",
+                    "ack_policy": "neqo-like-ack",
                     "cc_algo": "cubic",
                     "port_no": "4433",
                     "local_port": 54434,

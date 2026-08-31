@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quicbench-paper-v1/run-manifest",
+  "title": "QUICbench Paper Dataset v1 run manifest",
+  "type": "object",
+  "required": ["dataset_schema", "policy_schema", "dataset_id", "suite_id", "run_id", "attempt_id", "repetition", "state", "paper_eligible", "requested", "runtime_reported", "validator_conclusion", "processes", "artifacts"],
+  "properties": {
+    "dataset_schema": {"const": "quicbench-paper-v1"},
+    "policy_schema": {"const": "receiver-ack-policy-v1.0.0"},
+    "state": {"enum": ["created", "preflight_passed", "running", "collecting", "validating", "completed_valid", "completed_invalid", "failed_preflight", "failed_start", "failed_runtime", "failed_collection", "failed_validation", "interrupted"]},
+    "requested": {"type": "object"},
+    "runtime_reported": {"type": "object"},
+    "validator_conclusion": {"type": "object"},
+    "processes": {"type": "array"},
+    "artifacts": {"type": "array"}
+  },
+  "additionalProperties": true
+}

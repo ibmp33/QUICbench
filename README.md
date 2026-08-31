@@ -15,7 +15,23 @@ The scientific invariants for ACK-policy experiments are documented in
 one server process, one listening port, and two independent QUIC connections,
 and must pass workload-saturation validation.
 
-## Extensions in this fork
+## Current paper workflow
+
+The canonical final-data workflow is **QUICbench Paper Dataset v1**. Start with
+[`docs/PAPER_V1_WORKFLOW.md`](docs/PAPER_V1_WORKFLOW.md), the frozen policy
+definition in [`docs/PAPER_V1_ACK_POLICIES.md`](docs/PAPER_V1_ACK_POLICIES.md),
+and the mvfst H3 evidence audit in
+[`docs/PAPER_V1_MVFST_H3_AUDIT.md`](docs/PAPER_V1_MVFST_H3_AUDIT.md).
+
+Paper-v1 uses only `neqo-like-ack` and `chrome-like-ack`. All 11 main
+sender/CC/pacing paths use HTTP/3, and mvfst is identified as
+`mvfst + paper-v1 H3 adapter`. The frozen plan contains 400 baseline-network
+runs, 160 network-sensitivity runs and 44 non-paper smoke runs. Old
+fixed-ratio, ACK_FREQUENCY, mvfst tperf/raw-QUIC and the commands below this
+section are retained as legacy/debug workflows and cannot enter the Paper-v1
+export.
+
+## Legacy extensions in this fork
 
 This fork separates the client ACK policy from the server implementation:
 

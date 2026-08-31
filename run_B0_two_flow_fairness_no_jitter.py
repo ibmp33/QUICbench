@@ -4,6 +4,7 @@ import json
 import os
 import platform
 import subprocess
+import tempfile
 import time
 from datetime import datetime
 from operator import itemgetter
@@ -12,7 +13,7 @@ from ack_policies import load_ack_policy_configs
 from network.clear_netem import clear_netem
 from network.set_netem import set_netem
 from network.tcpdump import TCPDump
-from stacks.mvfst import Mvfst
+from stacks.mvfst import Mvfst, MvfstH3
 from stacks.quiche import Quiche
 from stacks.quic_go import (
     QuicGo,
@@ -27,6 +28,7 @@ from workloads import generated_target, load_workload_profiles, resolve_workload
 
 STACK_CLASSES = {
     Mvfst.NAME: Mvfst,
+    MvfstH3.NAME: MvfstH3,
     Quiche.NAME: Quiche,
     Xquic.NAME: Xquic,
     QuicGo.NAME: QuicGo,
@@ -804,6 +806,7 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
         "server_log_path": server_paths["server_stderr_log"],
         "client_log_path": client_paths["client_stderr_log"],
         "client_metrics_path": client_paths.get("client_metrics_path"),
+        "ack_policy_event_log": client_paths.get("ack_policy_event_log"),
         "client_binary_path": client_stack.client_path,
         "server_binary_path": server_stack.server_path,
         "server_stdout_log": server_paths["server_stdout_log"],
@@ -826,6 +829,7 @@ def flow_plan(client_stack_name, client_stack, server_stack_name, server_stack, 
                 local_port=flow.get("local_port"),
                 ack_policy=flow.get("ack_policy"),
                 target=client_target,
+                flow_id=flow["flow_id"],
             ),
         ),
     }
@@ -888,8 +892,24 @@ def print_preflight_summary(exp_conf, general_conf, profile_name, trial_name, ru
 
 
 def write_local_json(path, payload):
-    with open(path, "w") as f:
-        json.dump(payload, f, indent=2)
+    directory = os.path.dirname(os.path.abspath(path))
+    ensure_local_dir(directory)
+    descriptor, temporary_path = tempfile.mkstemp(
+        prefix=".{}-".format(os.path.basename(path)), suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(descriptor, "w") as f:
+            json.dump(payload, f, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary_path, path)
+    except BaseException:
+        try:
+            os.unlink(temporary_path)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def file_sha256(path):
@@ -1035,6 +1055,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                 "server_log_path": plan["server_log_path"],
                 "client_log_path": plan["client_log_path"],
                 "client_metrics_path": plan["client_metrics_path"],
+                "ack_policy_event_log": plan["ack_policy_event_log"],
                 "client_binary_path": plan["client_binary_path"],
                 "client_binary": plan["client_binary_path"],
                 "client_binary_sha256": file_sha256(plan["client_binary_path"]),
@@ -1057,6 +1078,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
     write_local_json(os.path.join(run_results_dir, "run_manifest.json"), metadata)
 
     processes = []
+    client_processes = []
     server_processes = []
     tcpdump_started = False
     tcpdump = TCPDump("localhost", server_ip, capture_interface, os.path.join(run_results_dir, "packets.pcap"))
@@ -1078,6 +1100,19 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
             )
             processes.append(proc)
             server_processes.append((plan, proc))
+            metadata.setdefault("processes", []).append(
+                {
+                    "kind": "server",
+                    "launcher_pid": proc.pid,
+                    "command": plan["server_cmd"],
+                    "start_monotonic_ns": time.monotonic_ns(),
+                    "end_monotonic_ns": None,
+                    "exit_code": None,
+                    "termination_reason": None,
+                    "stdout_path": plan["server_log_path"].replace("stderr", "stdout"),
+                    "stderr_path": plan["server_log_path"],
+                }
+            )
             started_servers.add(server_key)
 
         time.sleep(2)
@@ -1129,6 +1164,7 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                     local_port=plan["local_port"],
                     ack_policy=plan["ack_policy"],
                     target=plan["client_target"],
+                    flow_id=plan["flow_id"],
                 ),
             )
             metadata["flows"][idx]["client_command"] = actual_client_cmd
@@ -1146,13 +1182,52 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
                     local_port=plan["local_port"],
                     ack_policy=plan["ack_policy"],
                     target=plan["client_target"],
+                    flow_id=plan["flow_id"],
                 ),
             )
             processes.append(proc)
+            client_processes.append((idx, plan, proc))
+            metadata.setdefault("processes", []).append(
+                {
+                    "kind": "client_{}".format(plan["flow_id"]),
+                    "pid": proc.pid,
+                    "command": actual_client_cmd,
+                    "start_monotonic_ns": time.monotonic_ns(),
+                    "end_monotonic_ns": None,
+                    "exit_code": None,
+                    "termination_reason": None,
+                    "stdout_path": plan["client_log_path"].replace("stderr", "stdout"),
+                    "stderr_path": plan["client_log_path"],
+                }
+            )
         write_local_json(os.path.join(run_results_dir, "run_manifest.json"), metadata)
 
-        for proc in processes:
-            proc.wait()
+        failed_clients = []
+        for idx, plan, proc in client_processes:
+            exit_code = proc.wait()
+            process_record = next(
+                item
+                for item in metadata["processes"]
+                if item["kind"] == "client_{}".format(plan["flow_id"])
+            )
+            process_record["end_monotonic_ns"] = time.monotonic_ns()
+            process_record["exit_code"] = exit_code
+            process_record["termination_reason"] = (
+                "normal" if exit_code == 0 else "nonzero_exit"
+            )
+            metadata["flows"][idx]["client_exit_code"] = exit_code
+            if exit_code != 0:
+                failed_clients.append(
+                    "{} exited {}: {}".format(
+                        plan["flow_id"],
+                        exit_code,
+                        read_log_excerpt(plan["client_log_path"]),
+                    )
+                )
+        write_local_json(os.path.join(run_results_dir, "run_manifest.json"), metadata)
+        if failed_clients:
+            fail("client runtime failure: {}".format(" ; ".join(failed_clients)))
+        assert_server_processes_healthy(server_processes)
 
         for flow_meta in metadata["flows"]:
             flow_meta["end_timestamp"] = now()
@@ -1161,6 +1236,29 @@ def run_trial(server_ip, capture_interface, flow_duration_s, run_results_dir, fl
     finally:
         if tcpdump_started:
             tcpdump.stop()
+        for plan, proc in server_processes:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    exit_code = proc.wait(timeout=5)
+                    termination_reason = "terminated_after_clients"
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    exit_code = proc.wait(timeout=5)
+                    termination_reason = "killed_after_terminate_timeout"
+            else:
+                exit_code = proc.returncode
+                termination_reason = "exited"
+            for process_record in metadata.get("processes", []):
+                if (
+                    process_record.get("kind") == "server"
+                    and process_record.get("launcher_pid") == proc.pid
+                ):
+                    process_record["end_monotonic_ns"] = time.monotonic_ns()
+                    process_record["exit_code"] = exit_code
+                    process_record["termination_reason"] = termination_reason
+        if "metadata" in locals():
+            write_local_json(os.path.join(run_results_dir, "run_manifest.json"), metadata)
 
 
 def parse_trial(exp_conf_path, general_conf_path, profile_name, trial_name, trial_dir):

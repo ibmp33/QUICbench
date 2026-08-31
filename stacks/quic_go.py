@@ -10,7 +10,12 @@ class QuicGo(Stack):
     CUBIC = "cubic"
     ACK_POLICY = None
     SUPPORTS_EXPERIMENT_FLAGS = False
-    ACK_POLICIES = {"fixed2", "fixed10", "neqo", "chromium"}
+    ACK_POLICIES = {
+        "neqo-like-ack",
+        "chrome-like-ack",
+        "synthetic-fixed-ack-2",
+        "synthetic-fixed-ack-10",
+    }
 
     def __init__(
         self,
@@ -40,6 +45,8 @@ class QuicGo(Stack):
         workload_capabilities=None,
         client_ack_frequency_mode="disabled",
         client_min_ack_delay=None,
+        paper_v1_mode=False,
+        paper_v1_policy_hashes=None,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -74,6 +81,10 @@ class QuicGo(Stack):
             client_min_ack_delay = "1ms"
         self.client_ack_frequency_mode = client_ack_frequency_mode
         self.client_min_ack_delay = client_min_ack_delay
+        self.paper_v1_mode = bool(paper_v1_mode)
+        self.paper_v1_policy_hashes = paper_v1_policy_hashes or {}
+        if self.paper_v1_mode and self.client_ack_frequency_mode != "disabled":
+            raise ValueError("paper-v1 forbids negotiated ACK_FREQUENCY")
         self.run_root = None
         self.qlog_enabled = False
 
@@ -90,6 +101,7 @@ class QuicGo(Stack):
         local_port=None,
         ack_policy=None,
         target=None,
+        flow_id=None,
     ):
         cmd = self.run_client_cmd(
             port_no,
@@ -98,6 +110,7 @@ class QuicGo(Stack):
             local_port=local_port,
             ack_policy=ack_policy,
             target=target,
+            flow_id=flow_id,
         )
         return subprocess.Popen(cmd, shell=True)
 
@@ -175,6 +188,7 @@ class QuicGo(Stack):
         local_port=None,
         ack_policy=None,
         target=None,
+        flow_id=None,
     ):
         root_dir = self._get_root_dir(self.client_path)
         run_dir = self._get_run_dir(port_no)
@@ -217,6 +231,8 @@ class QuicGo(Stack):
                     shlex.quote(effective_ack_policy),
                     "-metrics",
                     shlex.quote(os.path.join(run_dir, "metrics.csv")),
+                    "-ack-policy-log",
+                    shlex.quote(os.path.join(run_dir, "ack-policy-events.jsonl")),
                 ]
             )
             if self.client_ack_frequency_mode != "disabled":
@@ -226,6 +242,29 @@ class QuicGo(Stack):
                         shlex.quote(self.client_ack_frequency_mode),
                         "-min-ack-delay",
                         shlex.quote(str(self.client_min_ack_delay)),
+                    ]
+                )
+            if self.paper_v1_mode:
+                if effective_ack_policy not in {"neqo-like-ack", "chrome-like-ack"}:
+                    raise ValueError("paper-v1 permits only modeled ACK policies")
+                if not flow_id:
+                    raise ValueError("paper-v1 requires a flow ID")
+                policy_hash = self.paper_v1_policy_hashes.get(effective_ack_policy)
+                if not policy_hash:
+                    raise ValueError(
+                        "paper-v1 policy hash is missing for {!r}".format(
+                            effective_ack_policy
+                        )
+                    )
+                client_cmd.extend(
+                    [
+                        "-paper-v1",
+                        "-flow-id",
+                        shlex.quote(flow_id),
+                        "-policy-spec-sha256",
+                        shlex.quote(policy_hash),
+                        "-ack-frequency-mode",
+                        "disabled",
                     ]
                 )
             if target.get("max_bytes") is not None:
@@ -298,6 +337,7 @@ class QuicGo(Stack):
             "server_stderr_log": os.path.join(run_dir, "logs", "server.stderr.log"),
             "client_stdout_log": os.path.join(run_dir, "logs", "client.stdout.log"),
             "client_stderr_log": os.path.join(run_dir, "logs", "client.stderr.log"),
+            "ack_policy_event_log": os.path.join(run_dir, "ack-policy-events.jsonl"),
             "client_metrics_path": os.path.join(run_dir, "metrics.csv"),
         }
 

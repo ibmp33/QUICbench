@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quicbench-paper-v1/sender-runtime-v1.0.0",
+  "type": "object",
+  "required": ["schema_version", "event", "sender", "requested_cc", "active_cc", "fallback", "configured_pacing", "effective_pacing", "pacer_initialized", "pacing_callback_or_tick_observed", "icw"],
+  "properties": {
+    "schema_version": {"const": "sender-runtime-v1.0.0"},
+    "event": {"enum": ["sender_initialized", "sender_final"]},
+    "sender": {"enum": ["quic-go", "quiche", "xquic", "mvfst"]},
+    "requested_cc": {"type": "string"},
+    "active_cc": {"type": "string"},
+    "fallback": {"type": "boolean"},
+    "configured_pacing": {},
+    "effective_pacing": {"enum": ["paced", "unpaced", "effectively_unpaced"]},
+    "pacer_initialized": {"type": "boolean"},
+    "pacing_callback_or_tick_observed": {"type": "boolean"},
+    "icw": {},
+    "h3_adapter_identity": {"type": "string"},
+    "transport_commit": {"type": "string"},
+    "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": true
+}

@@ -42,29 +42,29 @@
         {
             "name": "P4_neqo_vs_neqo",
             "flows": [
-                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "baseline"},
-                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "baseline"}
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "neqo-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "baseline"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "neqo-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "baseline"}
             ]
         },
         {
             "name": "P4_chromium_vs_chromium",
             "flows": [
-                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "baseline"},
-                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "baseline"}
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "chrome-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "baseline"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "chrome-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "baseline"}
             ]
         },
         {
             "name": "P4_neqo_vs_chromium",
             "flows": [
-                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "test"},
-                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "test"}
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "neqo-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "test"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "chrome-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "test"}
             ]
         },
         {
             "name": "P4_chromium_vs_neqo",
             "flows": [
-                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "chromium", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "test"},
-                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "neqo", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "test"}
+                {"flow_id": "flow_a", "stack_name": "quic-go-policy", "ack_policy": "chrome-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54433, "role": "test"},
+                {"flow_id": "flow_b", "stack_name": "quic-go-policy", "ack_policy": "neqo-like-ack", "cc_algo": "bbr", "port_no": "6666", "local_port": 54434, "role": "test"}
             ]
         }
     ]

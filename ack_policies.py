@@ -4,16 +4,24 @@ import json
 
 
 REQUIRED_POLICY_FIELDS = {
-    "fixed2": {"initial_threshold", "steady_threshold", "max_ack_delay_ms", "timer_rule", "reordering_ack"},
-    "fixed10": {"initial_threshold", "steady_threshold", "max_ack_delay_ms", "timer_rule", "reordering_ack"},
-    "neqo": {"threshold", "max_ack_delay_ms", "timer_rule", "reordering_ack"},
-    "chromium": {
+    "synthetic-fixed-ack-2": {"policy_name", "policy_version", "initial_threshold", "steady_threshold", "max_ack_delay_ms", "timer_rule", "reordering_ack", "classification"},
+    "synthetic-fixed-ack-10": {"policy_name", "policy_version", "initial_threshold", "steady_threshold", "max_ack_delay_ms", "timer_rule", "reordering_ack", "classification"},
+    "neqo-like-ack": {"policy_name", "policy_version", "initial_threshold", "steady_threshold", "threshold_transition", "packet_number_spaces", "max_ack_delay_ms", "timer_rule", "immediate_ack_conditions", "reordering_ack", "state_scope", "reference", "reference_commit"},
+    "chrome-like-ack": {
+        "policy_name",
+        "policy_version",
         "initial_threshold",
         "steady_threshold",
-        "switch_after_packets",
+        "switch_after_packet_number_advance",
+        "transition_boundary",
         "max_ack_delay_ms",
         "timer_rule",
+        "immediate_ack_conditions",
         "reordering_ack",
+        "packet_number_spaces",
+        "state_scope",
+        "reference",
+        "reference_commit",
     },
 }
 
@@ -32,6 +40,8 @@ def load_ack_policy_configs(path):
             )
         )
     for policy, required_fields in REQUIRED_POLICY_FIELDS.items():
+        if policies[policy].get("policy_name") != policy:
+            raise ValueError("ACK policy {!r} has a mismatched policy_name".format(policy))
         missing_fields = required_fields.difference(policies[policy])
         if missing_fields:
             raise ValueError(

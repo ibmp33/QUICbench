@@ -1,0 +1,38 @@
+{
+  "dataset_schema": "quicbench-paper-v1",
+  "example_note": "Illustrative field layout only; process and artifact inventories are intentionally omitted.",
+  "policy_schema": "receiver-ack-policy-v1.0.0",
+  "dataset_id": "paper-v1-h3-main-20260831-freeze1",
+  "suite_id": "paper-v1-h3-main",
+  "run_id": "mvfst-h3__bbr__paced--neqo-like-ack__chrome-like-ack--r01",
+  "attempt_id": "attempt-20260831T010203Z-0001",
+  "repetition": 1,
+  "state": "completed_valid",
+  "paper_eligible": true,
+  "exclusion_reasons": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "requested": {
+    "sender": {"sender": "mvfst", "cc": "bbr", "requested_pacing": "on", "required_effective_pacing": "paced"},
+    "flows": [
+      {"flow_id": "flow_a", "policy": "neqo-like-ack", "client_local_port": 54433},
+      {"flow_id": "flow_b", "policy": "chrome-like-ack", "client_local_port": 54434}
+    ],
+    "workload": {"protocol": "http3", "response_body_bytes": 1073741824, "duration_s": 30, "measurement_window_s": [5, 25]}
+  },
+  "runtime_reported": {
+    "sender": {"requested_cc": "bbr", "active_cc": "bbr", "fallback": false, "configured_pacing": "on", "effective_pacing": "paced", "pacer_initialized": true, "pacing_callback_or_tick_observed": true, "icw": 32, "h3_adapter_identity": "mvfst + paper-v1 H3 adapter", "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3", "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a", "binary_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+    "workload": {"protocol": "http3", "server_process_count": 1, "server_listening_port_count": 1, "server_application_ready": true, "body_counter": "client-decoded-http3-response-body-bytes", "duration_s": 30, "measurement_window_start_s": 5, "measurement_window_end_s": 25},
+    "flows": [
+      {"flow_id": "flow_a", "connection_id": "cid-a", "client_local_port": 54433, "alpn": "h3", "http_status": 200, "headers_valid": true, "response_content_length": 1073741824, "decoded_body_bytes": 48000000, "measurement_window_body_bytes": 32000000, "stream_count": 1, "client_continuous_read": true, "flow_control_blocked_in_window": false, "application_limited_in_window": false},
+      {"flow_id": "flow_b", "connection_id": "cid-b", "client_local_port": 54434, "alpn": "h3", "http_status": 200, "headers_valid": true, "response_content_length": 1073741824, "decoded_body_bytes": 47000000, "measurement_window_body_bytes": 31000000, "stream_count": 1, "client_continuous_read": true, "flow_control_blocked_in_window": false, "application_limited_in_window": false}
+    ]
+  },
+  "validator_conclusion": {
+    "network": {"qdisc_matches_requested": true, "offloads_valid": true, "shared_bottleneck": true, "saturated": true, "both_flows_active": true, "not_application_limited": true, "start_skew_valid": true},
+    "wire": {"qlog_policy_consistent": true, "pcap_policy_consistent": true, "ack_delay_units_valid": true}
+  },
+  "processes": [],
+  "artifacts": [],
+  "state_history": []
+}

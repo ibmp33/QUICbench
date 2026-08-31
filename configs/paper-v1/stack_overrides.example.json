@@ -1,0 +1,29 @@
+{
+  "quic-go-policy": {
+    "paper_v1_mode": true,
+    "client_ack_frequency_mode": "disabled",
+    "paper_v1_policy_hashes": {
+      "neqo-like-ack": "56f40fb165d89d8f8f2074c5e843c840cdc77e4f1e89f4147a0d7fe970bc2042",
+      "chrome-like-ack": "f52216cf3261e0ae2e119fccc3d54d701574aa86585d264cc76f44cf45a58c43"
+    }
+  },
+  "xquic": {
+    "paper_v1_mode": true,
+    "protocol": "http3",
+    "server_response_bytes": 1073741824,
+    "workload_capabilities": {
+      "paper-v1-h3": {"mode": "dynamic-response"}
+    }
+  },
+  "mvfst-h3": {
+    "protocol": "http3",
+    "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a",
+    "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
+    "h3_adapter_patch_sha256": "replace-with-verified-adapter-patch-sha256",
+    "server_response_bytes": 1073741824,
+    "runtime_telemetry_required": true,
+    "workload_capabilities": {
+      "paper-v1-h3": {"mode": "dynamic-response"}
+    }
+  }
+}

@@ -12,7 +12,7 @@ from scripts.analyze_sender_mechanism_pilot import (
     condition_rows,
     resolve_jain,
 )
-from scripts.run_sender_mechanism_pilot import condition_documents
+from scripts.run_sender_mechanism_pilot import SUITES, condition_documents
 from saturation import validate_saturation
 from workloads import load_workload_profiles
 
@@ -54,8 +54,11 @@ class ExperimentSemanticsTest(unittest.TestCase):
             {plan["generated_target"] for plan in plans},
             {"https://198.19.0.2:4433/bytes/1073741824"},
         )
-        self.assertEqual(plans[0]["ack_policy_config"]["threshold"], 2)
-        self.assertEqual(plans[1]["ack_policy_config"]["switch_after_packets"], 100)
+        self.assertEqual(plans[0]["ack_policy_config"]["initial_threshold"], 2)
+        self.assertEqual(
+            plans[1]["ack_policy_config"]["switch_after_packet_number_advance"],
+            100,
+        )
 
     def test_main_fairness_rejects_different_server_port(self):
         invalid = copy.deepcopy(self.exp_conf)
@@ -76,7 +79,7 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn("no byte growth", result["reason"])
 
-    def test_main_matrix_contains_all_eight_policy_pairs(self):
+    def test_main_matrix_contains_only_four_modeled_policy_pairs(self):
         pairs = {
             tuple(flow["ack_policy"] for flow in trial["flows"])
             for trial in self.exp_conf["trials"]
@@ -84,16 +87,24 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertEqual(
             pairs,
             {
-                ("fixed2", "fixed2"),
-                ("fixed10", "fixed10"),
-                ("fixed2", "fixed10"),
-                ("fixed10", "fixed2"),
-                ("neqo", "chromium"),
-                ("chromium", "neqo"),
-                ("neqo", "neqo"),
-                ("chromium", "chromium"),
+                ("neqo-like-ack", "chrome-like-ack"),
+                ("chrome-like-ack", "neqo-like-ack"),
+                ("neqo-like-ack", "neqo-like-ack"),
+                ("chrome-like-ack", "chrome-like-ack"),
             },
         )
+
+    def test_manifest_policy_identity_matches_selected_runtime_policy(self):
+        for trial in self.exp_conf["trials"]:
+            for flow in trial["flows"]:
+                policy = flow["ack_policy"]
+                definition = self.exp_conf["ack_policy_configs"][policy]
+                self.assertEqual(definition["policy_name"], policy)
+                self.assertEqual(definition["policy_version"], "1.0.0")
+                self.assertEqual(
+                    definition["state_scope"],
+                    "per-connection-per-packet-number-space",
+                )
 
     def test_pcap_retention_policy_keeps_only_first_repetition(self):
         self.assertTrue(fairness_runner.should_keep_artifact("all", 7))
@@ -190,11 +201,11 @@ class ExperimentSemanticsTest(unittest.TestCase):
                 for trial in experiment["trials"]
             },
             {
-                ("neqo", "neqo"),
-                ("neqo", "chromium"),
-                ("chromium", "neqo"),
-                ("neqo", "fixed10"),
-                ("fixed10", "neqo"),
+                ("neqo-like-ack", "neqo-like-ack"),
+                ("neqo-like-ack", "chrome-like-ack"),
+                ("chrome-like-ack", "neqo-like-ack"),
+                ("neqo-like-ack", "synthetic-fixed-ack-10"),
+                ("synthetic-fixed-ack-10", "neqo-like-ack"),
             },
         )
 
@@ -272,15 +283,16 @@ class ExperimentSemanticsTest(unittest.TestCase):
         self.assertEqual(
             pairs,
             {
-                ("neqo", "neqo"),
-                ("chromium", "chromium"),
-                ("neqo", "chromium"),
-                ("chromium", "neqo"),
+                ("neqo-like-ack", "neqo-like-ack"),
+                ("chrome-like-ack", "chrome-like-ack"),
+                ("neqo-like-ack", "chrome-like-ack"),
+                ("chrome-like-ack", "neqo-like-ack"),
             },
         )
         canary, _ = condition_documents(
             experiment,
             self.stacks_conf,
+            SUITES["realistic"],
             "quiche",
             "reno",
             "off",

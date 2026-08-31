@@ -1,0 +1,51 @@
+{
+  "dataset_schema": "quicbench-paper-v1",
+  "policy_schema": "receiver-ack-policy-v1.0.0",
+  "suite_id": "paper-v1-h3-main",
+  "dataset_id_template": "paper-v1-h3-main-YYYYMMDD-freezeN",
+  "base_network_profile_id": "base_20m_50ms_q0p5_loss0",
+  "policy_pairs": [
+    ["neqo-like-ack", "neqo-like-ack"],
+    ["chrome-like-ack", "chrome-like-ack"],
+    ["neqo-like-ack", "chrome-like-ack"],
+    ["chrome-like-ack", "neqo-like-ack"]
+  ],
+  "workload": {
+    "protocol": "http3",
+    "direction": "server-to-client",
+    "connections": 2,
+    "streams_per_connection": 1,
+    "response_body_bytes": 1073741824,
+    "duration_s": 30,
+    "measurement_window_s": {"start": 5, "end": 25},
+    "body_counter": "client-decoded-http3-response-body-bytes",
+    "server_application_ready_required": true,
+    "client_continuous_read_required": true
+  },
+  "network_profiles": [
+    {"profile_id": "base_20m_50ms_q0p5_loss0", "forward_bandwidth_mbps": 20, "forward_delay_ms": 25, "reverse_delay_ms": 25, "reverse_bottleneck": false, "queue_size_bytes": 125000, "queue_label": "contract-q0p5", "random_loss_forward_percent": 0, "random_loss_reverse_percent": 0, "jitter_ms": 0, "intentional_reordering_percent": 0},
+    {"profile_id": "rtt10_20m_q0p5_loss0", "forward_bandwidth_mbps": 20, "forward_delay_ms": 5, "reverse_delay_ms": 5, "reverse_bottleneck": false, "queue_size_bytes": 25000, "queue_label": "contract-q0p5", "random_loss_forward_percent": 0, "random_loss_reverse_percent": 0, "jitter_ms": 0, "intentional_reordering_percent": 0},
+    {"profile_id": "rtt100_20m_q0p5_loss0", "forward_bandwidth_mbps": 20, "forward_delay_ms": 50, "reverse_delay_ms": 50, "reverse_bottleneck": false, "queue_size_bytes": 250000, "queue_label": "contract-q0p5", "random_loss_forward_percent": 0, "random_loss_reverse_percent": 0, "jitter_ms": 0, "intentional_reordering_percent": 0},
+    {"profile_id": "queue2_20m_50ms_loss0", "forward_bandwidth_mbps": 20, "forward_delay_ms": 25, "reverse_delay_ms": 25, "reverse_bottleneck": false, "queue_size_bytes": 500000, "queue_label": "contract-q2", "random_loss_forward_percent": 0, "random_loss_reverse_percent": 0, "jitter_ms": 0, "intentional_reordering_percent": 0},
+    {"profile_id": "loss0p1_20m_50ms_q0p5", "forward_bandwidth_mbps": 20, "forward_delay_ms": 25, "reverse_delay_ms": 25, "reverse_bottleneck": false, "queue_size_bytes": 125000, "queue_label": "contract-q0p5", "random_loss_forward_percent": 0.1, "random_loss_reverse_percent": 0, "jitter_ms": 0, "intentional_reordering_percent": 0}
+  ],
+  "paths": [
+    {"path_id": "quic-go__cubic__default-pacer", "experiment_class": "cubic-main", "repetitions": 10, "sender": "quic-go", "protocol": "http3", "cc": "cubic", "cc_family": "cubic", "requested_pacing": "default", "required_effective_pacing": "paced", "adapter_identity": "quic-go paper-v1 H3 server"},
+    {"path_id": "quiche__cubic__effectively-unpaced", "experiment_class": "cubic-main", "repetitions": 10, "sender": "quiche", "protocol": "http3", "cc": "cubic", "cc_family": "cubic", "requested_pacing": "off", "required_effective_pacing": "effectively_unpaced", "adapter_identity": "quiche apps H3 server"},
+    {"path_id": "xquic__cubic__pacing-off", "experiment_class": "cubic-main", "repetitions": 10, "sender": "xquic", "protocol": "http3", "cc": "cubic", "cc_family": "cubic", "requested_pacing": "off", "required_effective_pacing": "unpaced", "adapter_identity": "xquic paper-v1 continuous H3 server"},
+    {"path_id": "xquic__cubic__pacing-on", "experiment_class": "cubic-main", "repetitions": 10, "sender": "xquic", "protocol": "http3", "cc": "cubic", "cc_family": "cubic", "requested_pacing": "on", "required_effective_pacing": "paced", "adapter_identity": "xquic paper-v1 continuous H3 server"},
+    {"path_id": "mvfst-h3__cubic__pacing-off", "experiment_class": "cubic-main", "repetitions": 10, "sender": "mvfst", "protocol": "http3", "cc": "cubic", "cc_family": "cubic", "requested_pacing": "off", "required_effective_pacing": "unpaced", "adapter_identity": "mvfst + paper-v1 H3 adapter"},
+    {"path_id": "mvfst-h3__cubic__pacing-on", "experiment_class": "cubic-main", "repetitions": 10, "sender": "mvfst", "protocol": "http3", "cc": "cubic", "cc_family": "cubic", "requested_pacing": "on", "required_effective_pacing": "paced", "adapter_identity": "mvfst + paper-v1 H3 adapter"},
+    {"path_id": "quiche__reno__effectively-unpaced", "experiment_class": "reno-sensitivity", "repetitions": 10, "sender": "quiche", "protocol": "http3", "cc": "reno", "cc_family": "reno", "requested_pacing": "off", "required_effective_pacing": "effectively_unpaced", "adapter_identity": "quiche apps H3 server"},
+    {"path_id": "xquic__reno__pacing-off", "experiment_class": "reno-sensitivity", "repetitions": 10, "sender": "xquic", "protocol": "http3", "cc": "reno", "cc_family": "reno", "requested_pacing": "off", "required_effective_pacing": "unpaced", "adapter_identity": "xquic paper-v1 continuous H3 server"},
+    {"path_id": "mvfst-h3__newreno__pacing-off", "experiment_class": "reno-sensitivity", "repetitions": 10, "sender": "mvfst", "protocol": "http3", "cc": "newreno", "cc_family": "reno", "requested_pacing": "off", "required_effective_pacing": "unpaced", "adapter_identity": "mvfst + paper-v1 H3 adapter"},
+    {"path_id": "xquic__bbr-family__paced", "experiment_class": "bbr-exploratory", "repetitions": 5, "sender": "xquic", "protocol": "http3", "cc": "bbr-family", "cc_family": "bbr", "requested_pacing": "on", "required_effective_pacing": "paced", "adapter_identity": "xquic paper-v1 continuous H3 server"},
+    {"path_id": "mvfst-h3__bbr__paced", "experiment_class": "bbr-exploratory", "repetitions": 5, "sender": "mvfst", "protocol": "http3", "cc": "bbr", "cc_family": "bbr", "requested_pacing": "on", "required_effective_pacing": "paced", "adapter_identity": "mvfst + paper-v1 H3 adapter"}
+  ],
+  "network_sensitivity": {
+    "suite_id": "paper-v1-h3-network-sensitivity",
+    "anchor_path_ids": ["xquic__cubic__pacing-off", "mvfst-h3__cubic__pacing-off"],
+    "profile_ids": ["rtt10_20m_q0p5_loss0", "rtt100_20m_q0p5_loss0", "queue2_20m_50ms_loss0", "loss0p1_20m_50ms_q0p5"],
+    "repetitions": 5
+  }
+}

@@ -37,6 +37,7 @@ class Xquic(Stack):
         server_gso="implementation-default",
         workload_capabilities=None,
         server_response_bytes=None,
+        paper_v1_mode=False,
     ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
@@ -63,6 +64,13 @@ class Xquic(Stack):
         self.server_response_bytes = (
             int(server_response_bytes) if server_response_bytes is not None else None
         )
+        self.paper_v1_mode = bool(paper_v1_mode)
+        if self.paper_v1_mode and (
+            self.protocol != "http3"
+            or self.server_response_bytes is None
+            or self.server_response_bytes < 1073741824
+        ):
+            raise ValueError("paper-v1 xquic requires an HTTP/3 response of at least 1 GiB")
         self.run_root = None
         self.qlog_enabled = False
 
@@ -106,7 +114,16 @@ class Xquic(Stack):
         ]
         if self.server_pacing:
             server_cmd.append("-C")
-        if self.server_response_bytes is not None:
+        if self.paper_v1_mode:
+            server_cmd.extend(
+                [
+                    "--paper-v1-body-bytes",
+                    shlex.quote(str(self.server_response_bytes)),
+                    "--paper-v1-runtime-report",
+                    shlex.quote(os.path.join(run_dir, "xquic-runtime.jsonl")),
+                ]
+            )
+        elif self.server_response_bytes is not None:
             server_cmd.extend(["-s", shlex.quote(str(self.server_response_bytes))])
 
         parts.append(
@@ -285,9 +302,12 @@ class Xquic(Stack):
             self.CUBIC: "c",
             self.RENO: "r",
             "bbr": "b",
+            "bbr-family": "b",
             "copa": "P",
         }
-        return mapping.get(cc_algo, "c")
+        if cc_algo not in mapping:
+            raise ValueError("unsupported xquic CC {!r}".format(cc_algo))
+        return mapping[cc_algo]
 
     def _build_client_output_normalize_cmd(self, run_dir):
         output_dir = os.path.join(run_dir, "stdout")
