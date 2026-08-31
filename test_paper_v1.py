@@ -200,10 +200,10 @@ class PaperV1Test(unittest.TestCase):
             "pacing_callback_or_tick_observed": True,
             "icw": 32,
             "binary_sha256": "b" * 64,
-            "h3_adapter_identity": "mvfst + paper-v1 H3 adapter",
+            "h3_adapter_identity": "mvfst + paper-v1 minimal H3 adapter",
+            "h3_adapter_kind": "minimal-native-h3",
             "h3_adapter_patch_sha256": "a" * 64,
             "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
-            "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a",
         }
         with open(files["sender_runtime"], "w", encoding="utf-8") as artifact:
             artifact.write(json.dumps(sender_runtime) + "\n")
@@ -356,10 +356,10 @@ class PaperV1Test(unittest.TestCase):
                         "pacing_callback_or_tick_observed": True,
                         "icw": 32,
                         "binary_sha256": "b" * 64,
-                        "h3_adapter_identity": "mvfst + paper-v1 H3 adapter",
+                        "h3_adapter_identity": "mvfst + paper-v1 minimal H3 adapter",
                         "h3_adapter_patch_sha256": "a" * 64,
                         "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
-                        "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a",
+                        "h3_adapter_kind": "minimal-native-h3",
                     }
                 },
                 "validator_conclusion": {
@@ -455,7 +455,6 @@ class PaperV1Test(unittest.TestCase):
 
         mvfst = MvfstH3(
             **common,
-            proxygen_commit="db21b21a4f98524e68e775aa11a70db0f5bc057a",
             transport_commit="80168ffa14efcb5c5dd662cec82682e78788f8b3",
             h3_adapter_patch_sha256="a" * 64,
             server_pacing=True,
@@ -463,7 +462,8 @@ class PaperV1Test(unittest.TestCase):
         command = " ".join(mvfst.run_server_cmd(4433, 30, "bbr"))
         self.assertIn("--protocol=h3", command)
         self.assertIn("--paper_v1_runtime_report=", command)
-        self.assertIn("mvfst + paper-v1 H3 adapter", command)
+        self.assertIn("--response_bytes=1073741824", command)
+        self.assertIn("mvfst + paper-v1 minimal H3 adapter", command)
 
     def test_validator_fault_injection_process_checksum_jsonl_and_fallback(self):
         with tempfile.TemporaryDirectory() as temp_dir:

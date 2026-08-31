@@ -60,11 +60,14 @@ def run_preflight(local_config_path, matrix_path, policy_spec_path, allow_dirty=
     mvfst_expected = config.get("mvfst_h3", {})
     if mvfst_build["workload_protocol"] != "http3":
         raise PreflightError("mvfst-h3 build is not HTTP/3")
-    if mvfst_build.get("application_identity") != "mvfst + paper-v1 H3 adapter":
+    expected_adapter_identity = mvfst_expected.get(
+        "adapter_identity", "mvfst + paper-v1 minimal H3 adapter"
+    )
+    if mvfst_build.get("application_identity") != expected_adapter_identity:
         raise PreflightError("mvfst H3 adapter identity is absent from build manifest")
     required_mvfst_identity = {
         "transport_commit": mvfst_expected.get("transport_commit"),
-        "proxygen_commit": mvfst_expected.get("proxygen_commit"),
+        "h3_adapter_kind": mvfst_expected.get("adapter_kind"),
         "h3_adapter_patch_sha256": mvfst_expected.get("adapter_patch_sha256"),
     }
     for field, expected in required_mvfst_identity.items():

@@ -25,7 +25,7 @@ and the mvfst H3 evidence audit in
 
 Paper-v1 uses only `neqo-like-ack` and `chrome-like-ack`. All 11 main
 sender/CC/pacing paths use HTTP/3, and mvfst is identified as
-`mvfst + paper-v1 H3 adapter`. The frozen core plan contains 400 baseline
+`mvfst + paper-v1 minimal H3 adapter`. The frozen core plan contains 400 baseline
 runs, 120 loss-free network-sensitivity runs and 44 non-paper smoke runs. A
 separate 40-run forward-loss suite is disabled by default and reserved for an
 optional appendix. Old

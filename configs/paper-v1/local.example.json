@@ -5,15 +5,14 @@
     "quic-go": "/absolute/path/to/quic-go-ack-policies",
     "quiche": "/absolute/path/to/quiche",
     "xquic": "/absolute/path/to/xquic",
-    "mvfst": "/absolute/path/to/mvfst",
-    "proxygen": "/absolute/path/to/proxygen"
+    "mvfst": "/absolute/path/to/mvfst"
   },
   "binaries": {
     "receiver": "/absolute/path/to/quic-go-policy-client",
     "quic-go": "/absolute/path/to/quic-go-server",
     "quiche": "/absolute/path/to/quiche-server",
     "xquic": "/absolute/path/to/test_server",
-    "mvfst-h3": "/absolute/path/to/hq"
+    "mvfst-h3": "/absolute/path/to/mvfst-paper-v1-h3-server"
   },
   "tools": {
     "python": "/usr/bin/python3",
@@ -41,8 +40,8 @@
   },
   "mvfst_h3": {
     "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
-    "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a",
-    "adapter_identity": "mvfst + paper-v1 H3 adapter",
+    "adapter_identity": "mvfst + paper-v1 minimal H3 adapter",
+    "adapter_kind": "minimal-native-h3",
     "adapter_patch_sha256": "replace-with-verified-64-character-lowercase-sha256"
   }
 }

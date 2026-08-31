@@ -150,19 +150,19 @@ class Mvfst(QuicGo):
 
 
 class MvfstH3(Mvfst):
-    """Proxygen HQ HTTP/3 application over the pinned mvfst transport.
+    """Minimal paper-v1 HTTP/3 application over the pinned mvfst transport.
 
     This is an experiment adapter, not an upstream mvfst application. Runtime
-    validation must consume HQ/mvfst telemetry before accepting its declared
+    validation must consume adapter/mvfst telemetry before accepting its declared
     controller or pacing identity.
     """
 
     NAME = "mvfst-h3"
-    ADAPTER_IDENTITY = "mvfst + paper-v1 H3 adapter"
+    ADAPTER_IDENTITY = "mvfst + paper-v1 minimal H3 adapter"
+    ADAPTER_KIND = "minimal-native-h3"
 
     def __init__(
         self,
-        proxygen_commit,
         transport_commit,
         h3_adapter_patch_sha256,
         runtime_telemetry_required=True,
@@ -175,7 +175,6 @@ class MvfstH3(Mvfst):
         kwargs["protocol"] = "http3"
         kwargs["server_ack_frequency"] = False
         super().__init__(**kwargs)
-        self.proxygen_commit = proxygen_commit
         self.transport_commit = transport_commit
         self.h3_adapter_patch_sha256 = h3_adapter_patch_sha256
         self.runtime_telemetry_required = bool(runtime_telemetry_required)
@@ -199,11 +198,11 @@ class MvfstH3(Mvfst):
             "pacer_initialized": "runtime-telemetry-required",
             "pacing_callback_or_tick_observed": "runtime-telemetry-required",
             "gso": "enabled" if self.server_batching_mode in (1, 3) else "disabled",
-            "control_source": "mvfst-proxygen-runtime-report",
+            "control_source": "mvfst-paper-v1-adapter-runtime-report",
             "h3_adapter_identity": self.ADAPTER_IDENTITY,
+            "h3_adapter_kind": self.ADAPTER_KIND,
             "h3_adapter_patch_sha256": self.h3_adapter_patch_sha256,
             "transport_commit": self.transport_commit,
-            "proxygen_commit": self.proxygen_commit,
             "workload_protocol": "http3",
             "body_counter": "client-decoded-http3-response-body-bytes",
         }
@@ -230,6 +229,7 @@ class MvfstH3(Mvfst):
             "--threads=1",
             "--cert={}".format(shlex.quote(self.server_cert_path)),
             "--key={}".format(shlex.quote(self.server_key_path)),
+            "--response_bytes={}".format(self.server_response_bytes),
             "--use_insecure_default_cert=false",
             "--congestion={}".format(shlex.quote(requested_cc)),
             "--pacing={}".format("true" if self._pacing_enabled() else "false"),

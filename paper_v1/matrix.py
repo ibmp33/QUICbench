@@ -43,7 +43,7 @@ def load_matrix(path):
     for item in paths:
         if item.get("protocol") != "http3":
             raise MatrixError("every paper-v1 main path must use HTTP/3")
-        if item.get("sender") == "mvfst" and item.get("adapter_identity") != "mvfst + paper-v1 H3 adapter":
+        if item.get("sender") == "mvfst" and item.get("adapter_identity") != "mvfst + paper-v1 minimal H3 adapter":
             raise MatrixError("mvfst main paths require the paper-v1 H3 adapter")
         if item["cc_family"] == "bbr" and item["requested_pacing"] != "on":
             raise MatrixError("BBR paths must request effective pacing on")

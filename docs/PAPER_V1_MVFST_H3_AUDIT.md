@@ -1,87 +1,89 @@
-# mvfst HTTP/3 patch audit for Paper-v1
+# mvfst HTTP/3 adapter audit for Paper-v1
 
-Audit date: 2026-08-31. This document records the local source evidence; it does
-not certify a Linux binary or a completed H3 preflight.
+Audit date: 2026-08-31. This records the adapter that was built and exercised on
+the Linux experiment host. It does not make the adapter an upstream mvfst
+application and does not replace the remaining shaped-network preflight.
 
-## Identity and finding
+## Frozen identity
 
-- Base mvfst commit: `80168ffa14efcb5c5dd662cec82682e78788f8b3`.
-- Required Proxygen commit: `db21b21a4f98524e68e775aa11a70db0f5bc057a`.
-- Paper identity: `mvfst + paper-v1 H3 adapter`.
-- Current mvfst branch: `main` and dirty.
-- No local Proxygen checkout or HQ executable was found during the audit.
-- The H3 adapter source/diff is therefore not present and cannot yet be
-  certified. mvfst itself is the QUIC transport; its maintained HTTP/3 path is
-  through Proxygen, as stated by the [mvfst project](https://github.com/facebook/mvfst)
-  and [Proxygen project](https://github.com/facebook/proxygen).
+- Transport base: `80168ffa14efcb5c5dd662cec82682e78788f8b3`
+  (`v2026.08.03.00`).
+- Paper identity: `mvfst + paper-v1 minimal H3 adapter`.
+- Adapter kind: `minimal-native-h3` (not Proxygen/HQ).
+- Base-to-adapter binary-diff SHA-256:
+  `7aa116ff44894b79d067979ba46f1fbe3b5d49b5dcae457f60c21a5ffef86437`.
+- Linux verification branch/head: `agent/paper-v1-h3-port` at
+  `0370083d44f629dfc928f88d123bfec183aa6c55`.
+- Linux worktree was clean after that commit.
+- Verified binary SHA-256:
+  `1809b56f5ad7712e32841f6333ea9a0e79f8b82990a5b492ce8d53c3073ff460`.
+- Build command: `cmake --build /home/ioio33/mvfst-h3-build --target echo -j2`.
+- Toolchain: CMake 3.22.1, Ubuntu GCC 11.4.0, Ubuntu 22.04 x86-64.
 
-The previously mentioned custom echo/H3 commits `e5009bb9` and `e7918e5f`
-could not be resolved from the local repository. They are not accepted as build
-identity without recoverable commit objects and a reviewed diff.
+The local macOS isolation branch has different commit IDs because the same
+patch was reconstructed locally, but its base-to-head binary diff has the same
+SHA-256. The patch hash, not the workstation-local commit ID, is the portable
+adapter identity.
 
-## Complete local file classification
+## Patch classification
 
-### H3 contract / application launcher (untracked, not adapter source)
-
-| File | Classification | SHA-256 after this audit |
+| File | Class | Effect |
 |---|---|---|
-| `experiments/h3/versions.env` | Pinned dependency contract | `a7d72eaa703dbe2aad79b4341597b64d485e82b8f85d6d7ddfae42a59320a7d0` |
-| `experiments/h3/preflight.sh` | Fail-closed identity/preflight wrapper | `6ad7aa1ff53b7ac3f82fc812232e0b49f9719ec4889a155893c5c9353dbe8fca` |
-| `experiments/h3/run_h3_server.sh` | HQ server launcher/workload contract | `97257d1466b348283b0d564bd1f4743d7f8d6a1361b595f7fff3c8650b3958c7` |
-| `experiments/h3/README.md` | Documentation | `cd645c13670cf920469ac69a5c69820c3f5af33e16675570f247edbd9bb15132` |
+| `quic/samples/echo/EchoHandler.h` | H3 application + telemetry | Parses the fixed GET contract, emits QPACK/HEADERS, streams bounded DATA frames, records body and transport samples. |
+| `quic/samples/echo/EchoServer.h` | Application launcher + telemetry | Supplies the reusable response chunk, configures CC/pacing/batching, qlog and graceful shutdown. |
+| `quic/samples/echo/main.cpp` | Application CLI | Adds the Paper-v1 H3, CC, pacing, response-size and runtime-report contract. |
+| `quic/samples/echo/EchoTransportServer.h` | Application build compatibility | Updates the sample transport construction for the pinned mvfst API. |
+| `quic/samples/CMakeLists.txt` | Build glue | Links the dependencies used by the adapter. |
 
-These files select H3 and demand custom runtime-report flags. They do not
-implement HTTP/3, QPACK, response streaming, controller selection, recovery or
-pacing.
+No file under mvfst congestion control, loss recovery, ACK processing, packet
+scheduling or pacing implementation is changed. The adapter selects existing
+mvfst CC and pacing controls and reads their runtime state; it does not alter
+those mechanisms. Legacy tperf/ACK_FREQUENCY modifications are not present in
+this clean branch or binary.
 
-### Transport experiment modifications (tracked dirty diff; excluded)
+## Workload behavior verified on Linux
 
-| File | Classification |
-|---|---|
-| `quic/tools/tperf/TperfServer.cpp` | tperf ACK_FREQUENCY transport experiment |
-| `quic/tools/tperf/TperfServer.h` | tperf ACK_FREQUENCY state/configuration |
-| `quic/tools/tperf/tperf.cpp` | tperf ACK_FREQUENCY CLI/configuration |
+- ALPN `h3`, HTTP/3 status 200 and exact decoded body length were verified with
+  the quic-go ACK-policy client.
+- A single request for exactly 1 GiB completed without allocating a 1 GiB
+  response buffer. The server reuses a 64 KiB source chunk and queues DATA only
+  from stream write-ready callbacks.
+- The 1 GiB loopback smoke produced exactly 1,073,741,824 decoded body bytes;
+  observed server RSS stayed approximately 15--18 MiB.
+- Two concurrent connections with distinct local UDP ports completed exact
+  16 MiB responses under opposite receiver-policy assignments; the server
+  produced two distinct qlogs and two transport-ready events.
+- CUBIC off/on, NewReno off/on and BBR-on completed H3 downloads. Requested and
+  active CC agreed; no fallback was observed. BBR-off is rejected at startup.
+- CUBIC-on and BBR-on showed non-zero runtime pacing interval samples. The
+  short loopback NewReno-on smoke initialized pacing but did not show a
+  non-zero interval, so it is not an effective-pacing certification.
+- SIGTERM stopped the server with exit status zero and no abort stack trace.
+- Client and server qlogs, server transport/H3 events, exact body counters and
+  the requested server configuration JSONL were produced.
 
-The combined binary diff SHA-256 is
-`f34435558d899a2dc1007fd930df0fe9b4c50dde4a17895aee77d6ceb984cf37`.
-It changes receiver ACK processing behavior and must not enter an H3 Paper-v1
-transport build. It is legacy/transport-experiment work, not application glue.
+## Deliberate scope and remaining differences
 
-`collect_build_env_mvfst.sh` is untracked provenance tooling and not runtime
-transport or application code.
+This is a narrow experiment adapter, not a general-purpose browser server. Its
+QPACK/request decoder accepts the request pattern emitted by the pinned
+quic-go client and its response encoder uses a minimal static representation.
+It does not implement the breadth of Proxygen/HQ: dynamic QPACK tables,
+arbitrary methods and request bodies, priority, WebTransport, push, or a
+production HTTP routing stack. Therefore the paper must identify it exactly as
+`mvfst + paper-v1 minimal H3 adapter`, never as upstream mvfst H3 or Proxygen.
 
-## Required patch split
+The following gates are still open:
 
-Before a valid mvfst-H3 build, use three independent identities:
+1. Run the four paper cells (NewReno off, CUBIC off/on, BBR on) under the actual
+   20 Mbps shared bottleneck and 50 ms RTT, once for every policy pair.
+2. Derive effective pacing, application/flow-control limitation and body
+   goodput from artifacts rather than accepting requested configuration.
+3. Verify two-connection mapping and ACK behavior from pcap plus both endpoint
+   qlogs, including transition boundary, batch, spacing, delay and trigger.
+4. Convert the adapter's per-connection transport events into the canonical
+   `sender-runtime-v1.0.0` final record expected by the fail-closed validator.
+5. Freeze the final binary, runtime libraries, kernel/offload state and checksums
+   after shaped-network preflight. A rebuild requires a new binary identity.
 
-1. A minimal Proxygen/HQ H3 application adapter: numeric path, status/headers,
-   bounded streaming of at least 1 GiB, one process/port and two connections.
-2. Necessary telemetry only: requested/active CC, fallback, pacing configured
-   and effective, pacer init/ticks, ICW, flow-control/application-limited state,
-   H3 body counters, commit and binary identity.
-3. Any transport experiment change: separate commit/patch, excluded from the
-   canonical H3 build unless explicitly made a matrix treatment.
-
-The build manifest must record each commit/patch SHA separately. A dirty hash
-is permitted only for a canary and is never paper eligible.
-
-## Four required mvfst-H3 cells and gates
-
-| CC | Requested pacing | Required runtime result |
-|---|---:|---|
-| NewReno | off | active NewReno, unpaced |
-| CUBIC | off | active CUBIC, unpaced |
-| CUBIC | on | active CUBIC, pacer initialized and ticks observed |
-| BBR | on | active BBR, no fallback, pacer initialized and ticks observed |
-
-There is deliberately no BBR-off cell. A BBR→CUBIC fallback or absent pacing
-evidence invalidates the run.
-
-## Current disposition
-
-The matrix and launcher route mvfst through H3, and old tperf/raw-QUIC is marked
-legacy. However, all 16 mvfst Linux preflights (four cells × four policy pairs)
-remain blocked until the actual Proxygen adapter patch, clean source identities,
-build command/toolchain, executable HQ hash and runtime telemetry are supplied.
-This is an explicit failed-preflight condition, not a silent fallback to raw
-QUIC.
+Until those gates pass, mvfst-H3 is implementation-complete enough for Linux
+preflight, but it is not admitted to the formal Paper-v1 corpus.

@@ -6,7 +6,8 @@ Paper-v1 exporter.
 
 ## Frozen design
 
-- 11 sender/CC/pacing paths, including four `mvfst + paper-v1 H3 adapter` paths.
+- 11 sender/CC/pacing paths, including four
+  `mvfst + paper-v1 minimal H3 adapter` paths.
 - Four receiver policy pairs in role order: Neqo/Neqo, Chrome/Chrome,
   Neqo/Chrome, Chrome/Neqo.
 - Per-path repetitions: ten for CUBIC and Reno/NewReno, five for exploratory
@@ -51,14 +52,16 @@ propagation delay but no bandwidth limiter. Random loss, when selected, is
 forward-only.
 
 Build manifests are generated explicitly. mvfst-H3 needs an extra metadata
-file containing `application_identity`, `transport_commit`, `proxygen_commit`
-and `h3_adapter_patch_sha256`:
+file containing `application_identity`, `h3_adapter_kind`, `transport_commit`
+and `h3_adapter_patch_sha256`. The adapter is deliberately minimal and native
+to this pinned mvfst tree; it is not Proxygen/HQ and must not be described as
+an upstream mvfst application:
 
 ```bash
 python3 -m paper_v1.cli build-manifest \
   --component-id mvfst-h3 \
-  --repository /absolute/path/to/proxygen \
-  --binary /absolute/path/to/hq \
+  --repository /absolute/path/to/mvfst \
+  --binary /absolute/path/to/mvfst-paper-v1-h3-server \
   --build-command 'record the exact reproducible build command' \
   --build-flag paper-v1-h3-adapter \
   --supported-cc newreno --supported-cc cubic --supported-cc bbr \

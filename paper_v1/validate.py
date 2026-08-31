@@ -304,9 +304,9 @@ def _validate_sender_runtime(manifest, artifacts, issues):
     if requested_sender.get("sender") == "mvfst":
         for field in (
             "h3_adapter_identity",
+            "h3_adapter_kind",
             "h3_adapter_patch_sha256",
             "transport_commit",
-            "proxygen_commit",
         ):
             if reported.get(field) != manifest_sender.get(field) or not reported.get(field):
                 issues.append(_issue("mvfst_runtime_identity", field, "sender_identity"))
@@ -496,7 +496,7 @@ def validate_run(run_dir, policy_spec_path):
     if sender.get("pacing_callback_or_tick_observed") is not True and requested_sender.get("required_effective_pacing") == "paced":
         issues.append(_issue("pacer_tick_not_observed", repr(sender), "sender_identity"))
     if requested_sender.get("sender") == "mvfst":
-        if sender.get("h3_adapter_identity") != "mvfst + paper-v1 H3 adapter":
+        if sender.get("h3_adapter_identity") != "mvfst + paper-v1 minimal H3 adapter":
             issues.append(_issue("mvfst_h3_identity", repr(sender), "sender_identity"))
     network = manifest.get("validator_conclusion", {}).get("network", {})
     for key in (

@@ -17,7 +17,6 @@
   },
   "mvfst-h3": {
     "protocol": "http3",
-    "proxygen_commit": "db21b21a4f98524e68e775aa11a70db0f5bc057a",
     "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
     "h3_adapter_patch_sha256": "replace-with-verified-adapter-patch-sha256",
     "server_response_bytes": 1073741824,
