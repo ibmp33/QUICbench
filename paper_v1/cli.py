@@ -15,6 +15,7 @@ from paper_v1.matrix import (
     planned_sensitivity_runs,
 )
 from paper_v1.preflight import run_preflight
+from paper_v1.runner import PaperV1Runner
 from paper_v1.validate import validate_run
 
 
@@ -46,6 +47,14 @@ def _parser():
     validate = subparsers.add_parser("validate")
     validate.add_argument("run_dir")
     validate.add_argument("--policy-spec", default=DEFAULT_POLICY_SPEC)
+
+    run = subparsers.add_parser("run")
+    run.add_argument("--local-config", required=True)
+    run.add_argument("--run-id", required=True)
+    run.add_argument("--attempt-id")
+    run.add_argument("--matrix", default=DEFAULT_MATRIX)
+    run.add_argument("--policy-spec", default=DEFAULT_POLICY_SPEC)
+    run.add_argument("--smoke", action="store_true")
 
     export = subparsers.add_parser("export")
     export.add_argument("dataset_dir")
@@ -86,7 +95,12 @@ def main(argv=None):
             runs = [run for run in runs if run["run_id"] == args.run_id]
         print(json.dumps({"count": len(runs), "runs": runs}, indent=2))
         return 0
-    if args.command == "preflight":
+    if args.command == "run":
+        runner = PaperV1Runner(args.local_config, args.matrix, args.policy_spec)
+        run_dir = runner.run(args.run_id, attempt_id=args.attempt_id, smoke=args.smoke)
+        result = validate_run(run_dir, args.policy_spec)
+        result["run_dir"] = run_dir
+    elif args.command == "preflight":
         result = run_preflight(
             args.local_config,
             args.matrix,
