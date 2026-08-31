@@ -154,6 +154,10 @@ class PaperV1Test(unittest.TestCase):
             with open(path, "wb") as artifact:
                 artifact.write(b"artifact\n")
             files[role] = path
+        transport_log = os.path.join(run_dir, "sender_transport_log.artifact")
+        with open(transport_log, "wb") as artifact:
+            artifact.write(b"PAPER_V1_TRANSPORT_EVENT {}\n")
+        files["sender_transport_log"] = transport_log
         flow_a_events = [
             self._event("flow_a", "neqo-like-ack"),
             self._ack("flow_a", "neqo-like-ack"),
@@ -205,6 +209,7 @@ class PaperV1Test(unittest.TestCase):
             "h3_adapter_patch_sha256": "a" * 64,
             "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
             "raw_runtime_sha256": sha256_file(files["sender_runtime_raw"]),
+            "transport_log_sha256": sha256_file(files["sender_transport_log"]),
         }
         with open(files["sender_runtime"], "w", encoding="utf-8") as artifact:
             artifact.write(json.dumps(sender_runtime) + "\n")

@@ -311,7 +311,7 @@ def _validate_sender_runtime(manifest, artifacts, issues):
     if reported.get("binary_sha256") != requested_sender.get("binary_sha256"):
         issues.append(_issue("sender_binary_identity", repr(reported), "sender_identity"))
     source_roles = {"raw_runtime_sha256": "sender_runtime_raw"}
-    if requested_sender.get("sender") == "xquic":
+    if requested_sender.get("sender") in ("xquic", "mvfst"):
         source_roles["transport_log_sha256"] = "sender_transport_log"
     for field, role in source_roles.items():
         if role not in artifacts or reported.get(field) != artifacts[role].get("sha256"):

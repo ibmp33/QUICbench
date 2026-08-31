@@ -239,10 +239,13 @@ class PaperV1Runner:
             server_ip=self.config["network"].get("server_ip", "198.19.0.2"),
             client_ip=self.config["network"].get("client_ip", "198.19.0.6"),
         )
+        requested_sender = dict(path, binary_sha256=_binary_sha256(
+            self.config["binaries"]["mvfst-h3" if path["sender"] == "mvfst" else path["sender"]]
+        ))
+        if path["sender"] == "mvfst":
+            requested_sender.update(self.config.get("mvfst_h3", {}))
         manifest["requested"] = {
-            "sender": dict(path, binary_sha256=_binary_sha256(
-                self.config["binaries"]["mvfst-h3" if path["sender"] == "mvfst" else path["sender"]]
-            )),
+            "sender": requested_sender,
             "flows": [
                 dict(flow_id="flow_a", policy=planned["policy_pair"][0],
                      policy_version="1.0.0", policy_spec_sha256=self.policy_spec["policies"][planned["policy_pair"][0]]["parameter_schema_sha256"],
@@ -420,7 +423,11 @@ class PaperV1Runner:
             ),
             "sender_runtime": os.path.join(run_dir, "sender-runtime.jsonl"),
             "sender_runtime_raw": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
-            "sender_transport_log": os.path.join(run_dir, "xquic-server.slog"),
+            "sender_transport_log": (
+                os.path.join(run_dir, "xquic-server.slog")
+                if os.path.isfile(os.path.join(run_dir, "xquic-server.slog"))
+                else os.path.join(run_dir, "server.stderr.log")
+            ),
             "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
             "network_evidence": os.path.join(run_dir, "network-evidence.json"),
             "wire_evidence": os.path.join(run_dir, "wire-evidence.json"),

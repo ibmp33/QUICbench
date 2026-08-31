@@ -205,6 +205,103 @@ def derive_sender(run_dir, manifest):
     if not os.path.isfile(raw_path) or os.path.getsize(raw_path) == 0:
         return None
     events = _jsonl(raw_path)
+    if requested["sender"] == "mvfst":
+        transport_path = os.path.join(run_dir, "server.stderr.log")
+        if not os.path.isfile(transport_path) or os.path.getsize(transport_path) == 0:
+            return None
+        marked = {
+            "PAPER_V1_TRANSPORT_EVENT ": [],
+            "PAPER_V1_TRANSPORT_SAMPLE ": [],
+            "PAPER_V1_SERVER_CONFIG ": [],
+            "PAPER_V1_PACING_EVENT ": [],
+        }
+        with open(transport_path, encoding="utf-8", errors="replace") as source:
+            for line in source:
+                for marker in marked:
+                    if marker in line:
+                        try:
+                            marked[marker].append(json.loads(line.split(marker, 1)[1]))
+                        except json.JSONDecodeError:
+                            return None
+                        break
+        ready = marked["PAPER_V1_TRANSPORT_EVENT "]
+        samples = marked["PAPER_V1_TRANSPORT_SAMPLE "]
+        configs = marked["PAPER_V1_SERVER_CONFIG "]
+        pacing_events = marked["PAPER_V1_PACING_EVENT "]
+        raw_configs = [event for event in events if event.get("event") == "server_config"]
+        active = {event.get("active_cc") for event in ready}
+        configured = {event.get("configured_pacing") for event in ready}
+        fallback = {event.get("fallback") for event in ready}
+        icws = {event.get("icw_mss") for event in configs}
+        if (
+            len(ready) < 2
+            or len(raw_configs) != 1
+            or any(len(values) != 1 for values in (active, configured, fallback, icws))
+            or None in active
+            or None in configured
+            or None in fallback
+            or None in icws
+        ):
+            return None
+        configured_pacing = next(iter(configured))
+        initialized_ids = {
+            event.get("looper_id") for event in pacing_events
+            if event.get("event") == "pacer_initialized"
+        }
+        fired_ids = {
+            event.get("looper_id") for event in pacing_events
+            if event.get("event") == "pacing_timer_fired"
+        }
+        nonzero_pacing_samples = [
+            event for event in samples
+            if int(event.get("pacing_burst_size", 0)) > 0
+            or int(event.get("pacing_interval_us", 0)) > 0
+        ]
+        if configured_pacing:
+            if (
+                len(initialized_ids) < 2
+                or len(fired_ids) < 2
+                or not fired_ids.issubset(initialized_ids)
+                or not nonzero_pacing_samples
+            ):
+                return None
+            effective_pacing = "paced"
+        else:
+            if pacing_events or nonzero_pacing_samples:
+                return None
+            effective_pacing = "unpaced"
+        active_cc = next(iter(active))
+        final = {
+            "schema_version": "sender-runtime-v1.0.0",
+            "event": "sender_final",
+            "sender": "mvfst",
+            "active_cc": active_cc,
+            "fallback": next(iter(fallback)) or active_cc != requested["cc"],
+            "configured_pacing": "on" if configured_pacing else "off",
+            "effective_pacing": effective_pacing,
+            "pacer_initialized": len(initialized_ids) >= 2,
+            "pacing_callback_or_tick_observed": len(fired_ids) >= 2,
+            "icw": next(iter(icws)),
+            "binary_sha256": requested["binary_sha256"],
+            "h3_adapter_identity": raw_configs[0].get("adapter_identity"),
+            "h3_adapter_kind": requested.get("adapter_kind"),
+            "h3_adapter_patch_sha256": requested.get("adapter_patch_sha256"),
+            "transport_commit": requested.get("transport_commit"),
+            "patch_commit": requested.get("patch_commit"),
+            "direct_event_counts": {
+                "transport_ready": len(ready),
+                "transport_samples": len(samples),
+                "nonzero_pacing_samples": len(nonzero_pacing_samples),
+                "pacer_initialized": len(initialized_ids),
+                "pacing_timer_fired": len(fired_ids),
+            },
+            "raw_runtime_sha256": sha256_file(raw_path),
+            "transport_log_sha256": sha256_file(transport_path),
+        }
+        final_path = os.path.join(run_dir, "sender-runtime.jsonl")
+        with open(final_path, "w", encoding="utf-8") as artifact:
+            artifact.write(json.dumps(final, sort_keys=True) + "\n")
+        return final
     if requested["sender"] == "quiche":
         initialized = [
             event for event in events

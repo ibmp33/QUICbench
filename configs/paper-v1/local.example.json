@@ -40,6 +40,7 @@
   },
   "mvfst_h3": {
     "transport_commit": "80168ffa14efcb5c5dd662cec82682e78788f8b3",
+    "patch_commit": "replace-with-verified-40-character-lowercase-commit",
     "adapter_identity": "mvfst + paper-v1 minimal H3 adapter",
     "adapter_kind": "minimal-native-h3",
     "adapter_patch_sha256": "replace-with-verified-64-character-lowercase-sha256"

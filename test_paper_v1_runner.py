@@ -134,6 +134,48 @@ class PaperV1RunnerTest(unittest.TestCase):
         self.assertFalse(result["fallback"])
         self.assertEqual(result["direct_event_counts"]["transport_initialized"], 2)
 
+    def test_mvfst_paced_identity_requires_two_live_pacer_events(self):
+        raw = os.path.join(self.temp.name, "sender-runtime-initial.jsonl")
+        with open(raw, "w", encoding="utf-8") as artifact:
+            artifact.write(json.dumps({
+                "event": "server_config",
+                "adapter_identity": "mvfst + paper-v1 minimal H3 adapter",
+            }) + "\n")
+        stderr = os.path.join(self.temp.name, "server.stderr.log")
+        events = []
+        for connection in ("a", "b"):
+            events.extend([
+                ("PAPER_V1_TRANSPORT_EVENT ", {
+                    "event": "transport_ready", "active_cc": "bbr",
+                    "configured_pacing": True, "fallback": False,
+                }),
+                ("PAPER_V1_PACING_EVENT ", {
+                    "event": "pacer_initialized", "looper_id": connection,
+                }),
+                ("PAPER_V1_PACING_EVENT ", {
+                    "event": "pacing_timer_fired", "looper_id": connection,
+                }),
+                ("PAPER_V1_TRANSPORT_SAMPLE ", {
+                    "pacing_burst_size": 10, "pacing_interval_us": 100,
+                }),
+            ])
+        events.append(("PAPER_V1_SERVER_CONFIG ", {"icw_mss": 10}))
+        with open(stderr, "w", encoding="utf-8") as artifact:
+            for marker, event in events:
+                artifact.write("prefix " + marker + json.dumps(event) + "\n")
+        result = derive_sender(self.temp.name, {"requested": {"sender": {
+            "sender": "mvfst", "cc": "bbr", "requested_pacing": "on",
+            "binary_sha256": "c" * 64,
+            "adapter_kind": "minimal-native-h3",
+            "adapter_patch_sha256": "d" * 64,
+            "transport_commit": "e" * 40,
+            "patch_commit": "f" * 40,
+        }}})
+        self.assertEqual(result["effective_pacing"], "paced")
+        self.assertTrue(result["pacer_initialized"])
+        self.assertTrue(result["pacing_callback_or_tick_observed"])
+        self.assertEqual(result["direct_event_counts"]["pacing_timer_fired"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
