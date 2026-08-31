@@ -205,6 +205,57 @@ def derive_sender(run_dir, manifest):
     if not os.path.isfile(raw_path) or os.path.getsize(raw_path) == 0:
         return None
     events = _jsonl(raw_path)
+    if requested["sender"] == "quiche":
+        initialized = [
+            event for event in events
+            if event.get("schema") == "sender-runtime-v1.0.0"
+            and event.get("event") == "transport_initialized"
+            and event.get("sender") == "quiche"
+        ]
+        active = {event.get("active_cc") for event in initialized}
+        configured = {event.get("configured_pacing") for event in initialized}
+        pacing = {event.get("effective_pacing") for event in initialized}
+        connection_ids = {event.get("connection_id") for event in initialized}
+        icws = {
+            event.get("initial_congestion_window_packets")
+            for event in initialized
+        }
+        if (
+            len(initialized) < 2
+            or any(len(values) != 1 for values in (active, configured, pacing, icws))
+            or len(connection_ids) < 2
+            or None in active
+            or None in configured
+            or None in pacing
+            or None in icws
+        ):
+            return None
+        active_cc = next(iter(active))
+        effective_pacing = next(iter(pacing))
+        configured_pacing = next(iter(configured))
+        final = {
+            "schema_version": "sender-runtime-v1.0.0",
+            "event": "sender_final",
+            "sender": "quiche",
+            "active_cc": active_cc,
+            "fallback": active_cc != requested["cc"],
+            "configured_pacing": "on" if configured_pacing else "off",
+            "effective_pacing": (
+                "paced" if effective_pacing else "effectively_unpaced"
+            ),
+            "pacer_initialized": bool(effective_pacing),
+            "pacing_callback_or_tick_observed": False,
+            "icw": next(iter(icws)),
+            "binary_sha256": requested["binary_sha256"],
+            "direct_event_counts": {
+                "transport_initialized": len(initialized),
+            },
+            "raw_runtime_sha256": sha256_file(raw_path),
+        }
+        final_path = os.path.join(run_dir, "sender-runtime.jsonl")
+        with open(final_path, "w", encoding="utf-8") as artifact:
+            artifact.write(json.dumps(final, sort_keys=True) + "\n")
+        return final
     if requested["sender"] == "xquic":
         transport_path = os.path.join(run_dir, "xquic-server.slog")
         if not os.path.isfile(transport_path) or os.path.getsize(transport_path) == 0:

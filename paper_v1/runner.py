@@ -137,7 +137,7 @@ class PaperV1Runner:
         qlog_dir = _mkdir(os.path.join(run_dir, "qlog", "server"))
         root = _mkdir(os.path.join(run_dir, "server-root"))
         object_path = os.path.join(root, str(response_bytes))
-        if sender in ("quic-go", "quiche") and not os.path.exists(object_path):
+        if sender == "quic-go" and not os.path.exists(object_path):
             with open(object_path, "wb") as artifact:
                 artifact.truncate(response_bytes)
         env = os.environ.copy()
@@ -147,10 +147,12 @@ class PaperV1Runner:
             argv = [binary, "-addr", "{}:{}".format(server_ip, port), "-cert", cert, "-key", key,
                     "-root", root, "-qlog-dir", qlog_dir, "-paper-v1-runtime-report", runtime]
         elif sender == "quiche":
+            runtime = os.path.join(run_dir, "sender-runtime-initial.jsonl")
             env["QLOGDIR"] = qlog_dir
             env["RUST_LOG"] = "info"
             argv = [binary, "--listen", "{}:{}".format(server_ip, port), "--cert", cert, "--key", key,
-                    "--root", root, "--http-version", "HTTP/3", "--no-retry", "--cc-algorithm", path["cc"]]
+                    "--root", root, "--http-version", "HTTP/3", "--no-retry", "--cc-algorithm", path["cc"],
+                    "--paper-v1-runtime-report", runtime]
             if path["requested_pacing"] == "off":
                 argv.append("--disable-pacing")
         elif sender == "xquic":
@@ -187,10 +189,14 @@ class PaperV1Runner:
         local_port = local_ports[0 if flow_id == "flow_a" else 1]
         stream_window = int(self.config["network"].get("receiver_stream_window_bytes", 134217728))
         connection_window = int(self.config["network"].get("receiver_connection_window_bytes", 134217728))
+        request_path = (
+            "paper-v1/{}".format(response_bytes)
+            if path["sender"] == "quiche" else str(response_bytes)
+        )
         argv = [binary, "-paper-v1", "-protocol", "http3", "-ack-policy", policy,
                 "-ack-policy-log", os.path.join(flow_dir, "receiver-policy.jsonl"),
                 "-flow-id", flow_id, "-policy-spec-sha256", policy_hash,
-                "-url", "https://{}:{}/{}".format(server_ip, port, response_bytes),
+                "-url", "https://{}:{}/{}".format(server_ip, port, request_path),
                 "-server-name", server_name, "-insecure", "-local-port", str(local_port),
                 "-initial-dcid-length", str(int(self.config["network"].get("initial_dcid_length", 16))),
                 "-initial-stream-receive-window", str(stream_window),

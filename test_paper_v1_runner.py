@@ -52,6 +52,9 @@ class PaperV1RunnerTest(unittest.TestCase):
                 self.assertIn("--response_bytes=1073741824", joined)
             else:
                 self.assertIn("HTTP/3", joined) if path["sender"] == "quiche" else self.assertIn("-root", command)
+            if path["sender"] == "quiche":
+                self.assertIn("--paper-v1-runtime-report", command)
+                self.assertFalse(os.path.exists(os.path.join(run_dir, "server-root", "1073741824")))
 
     def test_receiver_command_requires_keylog_and_exact_policy_identity(self):
         planned, path, _ = _path_for_run(
@@ -69,6 +72,17 @@ class PaperV1RunnerTest(unittest.TestCase):
         self.assertIn("-max-connection-receive-window 134217728", joined)
         self.assertIn("test.xquic.com", command)
         self.assertIn("54434", command)
+
+    def test_quiche_client_uses_bounded_paper_v1_route(self):
+        planned, path, _ = _path_for_run(
+            self.runner.matrix,
+            "quiche__cubic__effectively-unpaced--neqo-like-ack__neqo-like-ack--r01",
+        )
+        command = self.runner._client_command(
+            "flow_a", planned["policy_pair"][0], self.temp.name, 4433, 5,
+            1073741824, path, 1234,
+        )
+        self.assertIn("https://198.19.0.2:4433/paper-v1/1073741824", command)
 
     def test_smoke_gate_does_not_change_paper_admission_threshold(self):
         self.assertEqual(saturation_threshold(True), 0.85)
@@ -93,6 +107,31 @@ class PaperV1RunnerTest(unittest.TestCase):
         self.assertEqual(result["configured_pacing"], "off")
         self.assertEqual(result["effective_pacing"], "paced")
         self.assertTrue(result["pacing_callback_or_tick_observed"])
+        self.assertEqual(result["direct_event_counts"]["transport_initialized"], 2)
+
+    def test_quiche_sender_identity_is_derived_per_connection(self):
+        raw = os.path.join(self.temp.name, "sender-runtime-initial.jsonl")
+        event = {
+            "schema": "sender-runtime-v1.0.0",
+            "event": "transport_initialized",
+            "sender": "quiche",
+            "connection_id": "abc",
+            "active_cc": "cubic",
+            "configured_pacing": False,
+            "effective_pacing": False,
+            "initial_congestion_window_packets": 10,
+        }
+        with open(raw, "w", encoding="utf-8") as artifact:
+            artifact.write(json.dumps(event) + "\n")
+            event["connection_id"] = "def"
+            artifact.write(json.dumps(event) + "\n")
+        result = derive_sender(self.temp.name, {"requested": {"sender": {
+            "sender": "quiche", "cc": "cubic", "requested_pacing": "off",
+            "binary_sha256": "b" * 64,
+        }}})
+        self.assertEqual(result["active_cc"], "cubic")
+        self.assertEqual(result["effective_pacing"], "effectively_unpaced")
+        self.assertFalse(result["fallback"])
         self.assertEqual(result["direct_event_counts"]["transport_initialized"], 2)
 
 
