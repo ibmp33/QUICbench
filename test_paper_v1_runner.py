@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from paper_v1.runner import PaperV1Runner, _path_for_run
+from paper_v1.runner import PaperV1Runner, _path_for_run, _transport_log_path
 from paper_v1.evidence import derive_sender, measurement_window, saturation_threshold
 
 
@@ -87,6 +87,18 @@ class PaperV1RunnerTest(unittest.TestCase):
     def test_smoke_gate_does_not_change_paper_admission_threshold(self):
         self.assertEqual(saturation_threshold(True), 0.85)
         self.assertEqual(saturation_threshold(False), 0.90)
+
+    def test_transport_log_role_only_exists_for_log_derived_senders(self):
+        self.assertIsNone(_transport_log_path("quic-go", self.temp.name))
+        self.assertIsNone(_transport_log_path("quiche", self.temp.name))
+        self.assertEqual(
+            _transport_log_path("xquic", self.temp.name),
+            os.path.join(self.temp.name, "xquic-server.slog"),
+        )
+        self.assertEqual(
+            _transport_log_path("mvfst", self.temp.name),
+            os.path.join(self.temp.name, "server.stderr.log"),
+        )
 
     def test_canonical_full_measurement_window_is_nested(self):
         workload = dict(self.runner.matrix["workload"], effective_duration_s=30)

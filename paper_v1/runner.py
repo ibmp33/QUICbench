@@ -18,6 +18,14 @@ from paper_v1.topology import NamespaceTopology
 from paper_v1.wire import derive_wire
 
 
+def _transport_log_path(sender_name, run_dir):
+    if sender_name == "xquic":
+        return os.path.join(run_dir, "xquic-server.slog")
+    if sender_name == "mvfst":
+        return os.path.join(run_dir, "server.stderr.log")
+    return None
+
+
 class RunError(RuntimeError):
     pass
 
@@ -362,6 +370,8 @@ class PaperV1Runner:
             topology.teardown()
 
     def _collect_artifacts(self, run_dir, store):
+        manifest = store.load()
+        sender_name = manifest["requested"]["sender"]["sender"]
         system_metadata = {
             "hostname": platform.node(),
             "kernel": platform.release(),
@@ -423,11 +433,11 @@ class PaperV1Runner:
             ),
             "sender_runtime": os.path.join(run_dir, "sender-runtime.jsonl"),
             "sender_runtime_raw": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
-            "sender_transport_log": (
-                os.path.join(run_dir, "xquic-server.slog")
-                if os.path.isfile(os.path.join(run_dir, "xquic-server.slog"))
-                else os.path.join(run_dir, "server.stderr.log")
-            ),
+            # Only stacks whose derived identity actually parses a transport
+            # log publish this semantic role. quic-go and quiche emit their
+            # direct transport events to sender-runtime-initial.jsonl; an
+            # empty, normal stderr must not masquerade as transport evidence.
+            "sender_transport_log": _transport_log_path(sender_name, run_dir),
             "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
             "network_evidence": os.path.join(run_dir, "network-evidence.json"),
             "wire_evidence": os.path.join(run_dir, "wire-evidence.json"),
