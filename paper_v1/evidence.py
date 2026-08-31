@@ -13,6 +13,26 @@ def _jsonl(path):
         return [json.loads(line) for line in source if line.strip()]
 
 
+def measurement_window(workload):
+    """Resolve the canonical nested Paper-v1 measurement window."""
+    effective_duration = int(workload.get("effective_duration_s", 30))
+    if workload.get("smoke"):
+        return 0, effective_duration
+    window = workload.get("measurement_window_s")
+    if not isinstance(window, dict):
+        # Keep old frozen manifests readable. New manifests use the nested
+        # experiment-contract representation.
+        return (
+            int(workload["measurement_window_start_s"]),
+            int(workload["measurement_window_end_s"]),
+        )
+    start = int(window["start"])
+    end = int(window["end"])
+    if not 0 <= start < end <= effective_duration:
+        raise ValueError("measurement window is outside run duration")
+    return start, end
+
+
 def _labels(path):
     result = {}
     with open(path, encoding="utf-8") as source:
@@ -37,8 +57,7 @@ def derive_runtime(run_dir, manifest):
     """Build the H3 flow contract from client logs, metrics and policy identity."""
     requested = manifest["requested"]
     effective_duration = requested["workload"]["effective_duration_s"]
-    window_start = 0 if requested["workload"].get("smoke") else requested["workload"]["measurement_window_start_s"]
-    window_end = effective_duration if requested["workload"].get("smoke") else requested["workload"]["measurement_window_end_s"]
+    window_start, window_end = measurement_window(requested["workload"])
     flows = []
     for flow_id in ("flow_a", "flow_b"):
         flow_dir = os.path.join(run_dir, flow_id)

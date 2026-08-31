@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from paper_v1.runner import PaperV1Runner, _path_for_run
-from paper_v1.evidence import derive_sender, saturation_threshold
+from paper_v1.evidence import derive_sender, measurement_window, saturation_threshold
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +87,12 @@ class PaperV1RunnerTest(unittest.TestCase):
     def test_smoke_gate_does_not_change_paper_admission_threshold(self):
         self.assertEqual(saturation_threshold(True), 0.85)
         self.assertEqual(saturation_threshold(False), 0.90)
+
+    def test_canonical_full_measurement_window_is_nested(self):
+        workload = dict(self.runner.matrix["workload"], effective_duration_s=30)
+        self.assertEqual(measurement_window(workload), (5, 25))
+        workload.update(smoke=True, effective_duration_s=5)
+        self.assertEqual(measurement_window(workload), (0, 5))
 
     def test_xquic_sender_identity_is_derived_from_transport_log(self):
         raw = os.path.join(self.temp.name, "sender-runtime-initial.jsonl")
