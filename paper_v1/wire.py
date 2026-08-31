@@ -45,7 +45,7 @@ def _qlog_acks(path):
                 acknowledged.update(range(int(smallest), int(largest) + 1))
             result.append({"time_ns": round(float(event["time"]) * 1_000_000),
                            "largest": max(acknowledged), "ack_delay_ns": round(float(frame.get("ack_delay", 0)) * 1_000_000),
-                           "acknowledged": acknowledged})
+                           "acknowledged": acknowledged, "ranges": ranges})
     previous = set()
     for index, item in enumerate(result):
         item["batch"] = len(item["acknowledged"] - previous)
@@ -116,7 +116,10 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
         qlog_spacing = [item["spacing_ns"] for item in qlog]
         qlog_delays = [item["ack_delay_ns"] for item in qlog]
         largest_match = [event["largest_acknowledged"] for event in episodes] == [item["largest"] for item in qlog]
-        batch_match = policy_batches == qlog_batches
+        range_match = len(episodes) == len(qlog) and all(
+            {(int(item["smallest"]), int(item["largest"])) for item in event["ack_ranges"]}
+            == {(int(value[0]), int(value[-1])) for value in observed["ranges"]}
+            for event, observed in zip(episodes, qlog))
         spacing_match = len(qlog_spacing) == len(policy_spacing) and all(
             abs(a - b) <= 2_000_000 for a, b in zip(policy_spacing[1:], qlog_spacing[1:]))
         delay_match = len(qlog_delays) == len(policy_delays) and all(
@@ -127,16 +130,17 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
                       and event.get("old_state") != "uninitialized"]
         transition_match = initialized["policy_name"] != "chrome-like-ack" or (
             len(transition) == 1 and transition[0]["observed_packet_number"] == transition[0]["reference_packet_number"] + 100)
-        consistent = largest_match and batch_match and spacing_match and delay_match and pcap_match
+        consistent = largest_match and range_match and spacing_match and delay_match and pcap_match
         all_consistent = all_consistent and consistent and transition_match
         source_hashes.update({"receiver_qlog_{}".format(flow_id): sha256_file(qlog_path),
                               "receiver_policy_{}".format(flow_id): sha256_file(policy_path),
                               "keylog_{}".format(flow_id): sha256_file(keylog_path)})
         flows.append({
             "flow_id": flow_id, "policy_name": initialized["policy_name"], "ack_episode_count": len(episodes),
-            "ack_batches": policy_batches, "ack_spacing_ns": policy_spacing, "ack_delay_ns": policy_delays,
+            "ack_batches": qlog_batches, "policy_ack_eliciting_batches": policy_batches,
+            "ack_spacing_ns": policy_spacing, "ack_delay_ns": policy_delays,
             "pcap_ack_frame_count": len(aligned), "qlog_ack_frame_count": len(qlog),
-            "ack_batch_observed": batch_match, "ack_spacing_observed": spacing_match,
+            "ack_batch_observed": range_match, "ack_spacing_observed": spacing_match,
             "ack_delay_observed": delay_match, "policy_log_matches_wire": consistent,
             "qlog_matches_pcap": pcap_match, "ack_delay_units_valid": delay_match and pcap_match,
             "transition_matches_wire": transition_match,

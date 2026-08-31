@@ -252,7 +252,11 @@ class PaperV1Runner:
             store.transition("preflight_passed")
             capture = ManagedProcess(
                 "capture",
-                self._ns_argv(topology.capture_namespace, ["tcpdump", "-i", topology.capture_interface, "-U", "-s", "0", "-w", os.path.join(run_dir, "trace.pcap"), "udp", "port", str(port)]),
+                # Capture at the server endpoint. Receiver ACKs have already
+                # traversed the reverse delay here, while outgoing Initials
+                # are visible before TBF and remain reliably decryptable by
+                # the Linux Wireshark 3.6 QUIC dissector.
+                self._ns_argv(topology.server_namespace, ["tcpdump", "-i", topology.server_interface, "-U", "-s", "0", "-w", os.path.join(run_dir, "trace.pcap"), "udp", "port", str(port)]),
                 os.path.join(run_dir, "capture.stdout.log"), os.path.join(run_dir, "capture.stderr.log"),
             ).start()
             self.processes.append(capture)
