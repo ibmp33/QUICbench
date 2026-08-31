@@ -15,6 +15,7 @@ from paper_v1.manifest import ManifestStore, new_manifest
 from paper_v1.matrix import load_matrix, planned_runs
 from paper_v1.policy import load_policy_spec
 from paper_v1.topology import NamespaceTopology
+from paper_v1.wire import derive_wire
 
 
 class RunError(RuntimeError):
@@ -291,7 +292,9 @@ class PaperV1Runner:
             manifest["processes"] = [process.record() for process in self.processes]
             runtime, network = write_derived_evidence(run_dir, manifest)
             manifest["runtime_reported"] = dict(runtime, smoke=bool(smoke))
+            wire = derive_wire(run_dir, manifest, self.config.get("tools", {}).get("tshark", "/usr/bin/tshark"))
             manifest.setdefault("validator_conclusion", {})["network"] = network["conclusion"]
+            manifest.setdefault("validator_conclusion", {})["wire"] = wire["conclusion"]
             store.save(manifest)
             self._collect_artifacts(run_dir, store)
             store.transition("validating")
@@ -376,6 +379,7 @@ class PaperV1Runner:
             "sender_runtime_raw": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
             "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
             "network_evidence": os.path.join(run_dir, "network-evidence.json"),
+            "wire_evidence": os.path.join(run_dir, "wire-evidence.json"),
         }
         atomic_write_json(role_paths["process_table"], [process.record() for process in self.processes])
         artifacts = []
