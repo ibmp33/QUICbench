@@ -62,6 +62,7 @@ def derive_runtime(run_dir, manifest):
             "flow_id": flow_id,
             "connection_id": initialized["connection_id"],
             "client_local_port": int(labels.get("Local UDP port", "0")),
+            "initial_dcid_length": int(labels.get("Initial DCID length", "0")),
             "request_start_unix_ns": int(labels.get("Request start Unix ns", "0")),
             "alpn": "h3" if labels.get("Proto", "").startswith("HTTP/3") else labels.get("Proto"),
             "http_status": int(labels.get("Status", "0").split()[0]),

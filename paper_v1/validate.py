@@ -508,6 +508,9 @@ def validate_run(run_dir, policy_spec_path):
                 issues.append(_issue("flow_control_blocked", flow.get("flow_id"), "workload"))
             if flow.get("application_limited_in_window") is not False:
                 issues.append(_issue("application_limited", flow.get("flow_id"), "workload"))
+            requested_flow = next(item for item in flows if item["flow_id"] == flow["flow_id"])
+            if flow.get("initial_dcid_length") != requested_flow.get("initial_dcid_length"):
+                issues.append(_issue("initial_dcid_identity", flow.get("flow_id"), "workload"))
         if None in connection_ids or len(connection_ids) != 2:
             issues.append(_issue("connection_isolation", repr(connection_ids), "workload"))
         if None in local_ports or len(local_ports) != 2:
