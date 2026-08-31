@@ -404,7 +404,14 @@ class PaperV1Runner:
             "capture_stderr": os.path.join(run_dir, "capture.stderr.log"),
             "receiver_qlog_flow_a": first_file(os.path.join(run_dir, "flow_a", "qlog")),
             "receiver_qlog_flow_b": first_file(os.path.join(run_dir, "flow_b", "qlog")),
-            "sender_qlog": server_qlog_archive if os.path.getsize(server_qlog_archive) > 10240 else None,
+            # xquic's test server writes qlog events and transport diagnostics
+            # to one combined slog. Preserve the same immutable file under
+            # both semantic roles; other stacks use the qlog archive.
+            "sender_qlog": (
+                os.path.join(run_dir, "xquic-server.slog")
+                if os.path.isfile(os.path.join(run_dir, "xquic-server.slog"))
+                else server_qlog_archive if os.path.getsize(server_qlog_archive) > 10240 else None
+            ),
             "sender_runtime": os.path.join(run_dir, "sender-runtime.jsonl"),
             "sender_runtime_raw": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
             "sender_transport_log": os.path.join(run_dir, "xquic-server.slog"),
