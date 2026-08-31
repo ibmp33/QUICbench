@@ -148,11 +148,43 @@ class PaperV1RunnerTest(unittest.TestCase):
         valid = os.path.join(dataset, run_id, "attempt-valid")
         os.makedirs(invalid)
         os.makedirs(valid)
+        expected = {
+            "sender_path": {"sender": "xquic", "cc": "cubic"},
+            "sender_binary_sha256": "sender-hash",
+            "receiver_binary_sha256": "receiver-hash",
+            "network_profile": {"queue_size_bytes": 62500},
+            "workload": {"duration_s": 30},
+            "policies": [
+                {"name": "neqo-like-ack", "spec_sha256": "neqo-hash"},
+                {"name": "chrome-like-ack", "spec_sha256": "chrome-hash"},
+            ],
+        }
         with open(os.path.join(invalid, "validation.json"), "w", encoding="utf-8") as artifact:
             json.dump({"status": "completed_invalid", "smoke_valid": False}, artifact)
         with open(os.path.join(valid, "validation.json"), "w", encoding="utf-8") as artifact:
             json.dump({"status": "completed_valid", "smoke_valid": True}, artifact)
-        self.assertEqual(_valid_existing_attempt(dataset, run_id), valid)
+        manifest = {
+            "state": "completed_valid",
+            "requested": {
+                "sender": {"sender": "xquic", "cc": "cubic", "binary_sha256": "sender-hash"},
+                "receiver_binary_sha256": "receiver-hash",
+                "network_profile": {"queue_size_bytes": 62500},
+                "workload": {"duration_s": 30, "smoke": True},
+                "flows": [
+                    {"policy": "neqo-like-ack", "policy_spec_sha256": "neqo-hash"},
+                    {"policy": "chrome-like-ack", "policy_spec_sha256": "chrome-hash"},
+                ],
+            },
+        }
+        with open(os.path.join(valid, "run_manifest.json"), "w", encoding="utf-8") as artifact:
+            json.dump(manifest, artifact)
+        with open(os.path.join(valid, "network-evidence.json"), "w", encoding="utf-8") as artifact:
+            json.dump({"schema_version": "network-evidence-v1.1.0"}, artifact)
+        self.assertEqual(_valid_existing_attempt(dataset, run_id, expected), valid)
+        manifest["requested"]["network_profile"]["queue_size_bytes"] = 125000
+        with open(os.path.join(valid, "run_manifest.json"), "w", encoding="utf-8") as artifact:
+            json.dump(manifest, artifact)
+        self.assertIsNone(_valid_existing_attempt(dataset, run_id, expected))
 
     def test_transport_log_role_only_exists_for_log_derived_senders(self):
         self.assertIsNone(_transport_log_path("quic-go", self.temp.name))
