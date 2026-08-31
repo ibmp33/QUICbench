@@ -8,6 +8,12 @@ import time
 from paper_v1.io import atomic_write_json, sha256_file
 
 
+# The policy hook timestamps the ACK decision; qlog timestamps the packet
+# emission. They use different zero points, and emission can be delayed by the
+# userspace scheduler. Keep the permitted variation explicit and report it.
+MAX_ACK_EMISSION_JITTER_NS = 25_000_000
+
+
 def _jsonl(path):
     events = []
     with open(path, encoding="utf-8") as source:
@@ -127,6 +133,22 @@ def _validation_window(manifest):
     return start_ns, end_ns - terminal_guard_ns, terminal_guard_ns
 
 
+def _emission_timing(policy_events, qlog_events, limit_ns=MAX_ACK_EMISSION_JITTER_NS):
+    """Remove the clock-origin offset and bound decision-to-emission jitter."""
+    if len(policy_events) != len(qlog_events) or len(qlog_events) < 2:
+        return False, [], 0
+    offsets = sorted(
+        int(observed["time_ns"]) - int(expected["monotonic_time_ns"])
+        for expected, observed in zip(policy_events, qlog_events)
+    )
+    origin_ns = offsets[len(offsets) // 2]
+    residuals = [
+        int(observed["time_ns"]) - int(expected["monotonic_time_ns"]) - origin_ns
+        for expected, observed in zip(policy_events, qlog_events)
+    ]
+    return all(abs(value) <= limit_ns for value in residuals), residuals, origin_ns
+
+
 def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
     pcap = os.path.join(run_dir, "trace.pcap")
     flows = []
@@ -162,8 +184,7 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
             {(int(item["smallest"]), int(item["largest"])) for item in event["ack_ranges"]}
             == {(int(value[0]), int(value[-1])) for value in observed["ranges"]}
             for event, observed in zip(episodes, qlog))
-        spacing_match = len(qlog_spacing) == len(policy_spacing) and all(
-            abs(a - b) <= 2_000_000 for a, b in zip(policy_spacing[1:], qlog_spacing[1:]))
+        emission_timing_valid, emission_residuals, clock_origin_offset_ns = _emission_timing(episodes, qlog)
         delay_match = len(qlog_delays) == len(policy_delays) and all(
             abs(a - b) <= 20_000 for a, b in zip(policy_delays, qlog_delays))
         pcap_match = len(aligned) == len(qlog) and all(
@@ -172,7 +193,7 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
                       and event.get("old_state") != "uninitialized"]
         transition_match = initialized["policy_name"] != "chrome-like-ack" or (
             len(transition) == 1 and transition[0]["observed_packet_number"] == transition[0]["reference_packet_number"] + 100)
-        consistent = largest_match and range_match and spacing_match and delay_match and pcap_match
+        consistent = largest_match and range_match and emission_timing_valid and delay_match and pcap_match
         all_consistent = all_consistent and consistent and transition_match
         source_hashes.update({"receiver_qlog_{}".format(flow_id): sha256_file(qlog_path),
                               "receiver_policy_{}".format(flow_id): sha256_file(policy_path),
@@ -180,9 +201,13 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
         flows.append({
             "flow_id": flow_id, "policy_name": initialized["policy_name"], "ack_episode_count": len(episodes),
             "ack_batches": qlog_batches, "policy_ack_eliciting_batches": policy_batches,
-            "ack_spacing_ns": policy_spacing, "ack_delay_ns": policy_delays,
+            "ack_spacing_ns": qlog_spacing, "policy_ack_spacing_ns": policy_spacing,
+            "ack_emission_residual_ns": emission_residuals,
+            "ack_emission_clock_origin_offset_ns": clock_origin_offset_ns,
+            "ack_emission_jitter_limit_ns": MAX_ACK_EMISSION_JITTER_NS,
+            "ack_delay_ns": policy_delays,
             "pcap_ack_frame_count": len(aligned), "qlog_ack_frame_count": len(qlog),
-            "ack_batch_observed": range_match, "ack_spacing_observed": spacing_match,
+            "ack_batch_observed": range_match, "ack_spacing_observed": emission_timing_valid,
             "ack_delay_observed": delay_match, "policy_log_matches_wire": consistent,
             "qlog_matches_pcap": pcap_match, "ack_delay_units_valid": delay_match and pcap_match,
             "transition_matches_wire": transition_match,
