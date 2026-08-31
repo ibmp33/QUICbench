@@ -3,10 +3,14 @@ import os
 import tempfile
 import unittest
 
-from paper_v1.wire import _align_pcap, _qlog_acks
+from paper_v1.wire import _align_pcap, _qlog_acks, _tool_command
 
 
 class PaperV1WireTest(unittest.TestCase):
+    def test_tool_command_supports_pinned_container_prefix(self):
+        prefix = ["docker", "run", "--rm", "image@sha256:abc"]
+        self.assertEqual(_tool_command(prefix, "--version"), prefix + ["--version"])
+
     def test_qlog_batches_and_pcap_alignment_skip_coalesced_handshake_ack(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "client.sqlog")

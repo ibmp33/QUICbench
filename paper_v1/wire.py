@@ -54,18 +54,23 @@ def _qlog_acks(path):
     return result
 
 
+def _tool_command(tshark, *arguments):
+    prefix = [tshark] if isinstance(tshark, str) else list(tshark)
+    return prefix + list(arguments)
+
+
 def _pcap_acks(tshark, pcap, keylog, local_port):
     # Wireshark 3.6 can associate simultaneous QUIC handshakes incorrectly
     # when only one connection's TLS secrets are supplied. Slice by the
     # immutable local UDP port before decryption so each keylog is evaluated
     # against exactly its own connection.
     sliced = os.path.join(os.path.dirname(pcap), "wire-port-{}.pcap".format(local_port))
-    filter_command = [tshark, "-r", pcap, "-Y", "udp.port=={}".format(local_port), "-w", sliced]
+    filter_command = _tool_command(tshark, "-r", pcap, "-Y", "udp.port=={}".format(local_port), "-w", sliced)
     subprocess.run(filter_command, check=True, capture_output=True, text=True)
-    command = [tshark, "-r", sliced, "-o", "tls.keylog_file:{}".format(keylog),
+    command = _tool_command(tshark, "-r", sliced, "-o", "tls.keylog_file:{}".format(keylog),
                "-Y", "udp.srcport=={} && quic.short && quic.ack.largest_acknowledged".format(local_port),
                "-T", "fields", "-E", "separator=/t", "-E", "occurrence=a",
-               "-e", "frame.time_epoch", "-e", "quic.ack.largest_acknowledged", "-e", "quic.ack.ack_delay"]
+               "-e", "frame.time_epoch", "-e", "quic.ack.largest_acknowledged", "-e", "quic.ack.ack_delay")
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
     result = []
     for line in completed.stdout.splitlines():
@@ -152,7 +157,7 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
             "qlog_matches_pcap": pcap_match, "ack_delay_units_valid": delay_match and pcap_match,
             "transition_matches_wire": transition_match,
         })
-    version = subprocess.run([tshark, "--version"], check=True, capture_output=True, text=True).stdout.splitlines()[0]
+    version = subprocess.run(_tool_command(tshark, "--version"), check=True, capture_output=True, text=True).stdout.splitlines()[0]
     evidence = {
         "schema_version": "wire-ack-evidence-v1.0.0",
         "extractor": {"name": "quicbench-wire-validator", "version": "1.0.0", "command": commands,

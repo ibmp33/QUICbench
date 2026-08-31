@@ -304,7 +304,13 @@ class PaperV1Runner:
             manifest["processes"] = [process.record() for process in self.processes]
             runtime, network = write_derived_evidence(run_dir, manifest)
             manifest["runtime_reported"] = dict(runtime, smoke=bool(smoke))
-            wire = derive_wire(run_dir, manifest, self.config.get("tools", {}).get("tshark", "/usr/bin/tshark"))
+            tools = self.config.get("tools", {})
+            if tools.get("tshark_container_image"):
+                tshark = [tools.get("docker", "/usr/bin/docker"), "run", "--rm",
+                          "-v", "{}:{}".format(run_dir, run_dir), tools["tshark_container_image"]]
+            else:
+                tshark = tools.get("tshark", "/usr/bin/tshark")
+            wire = derive_wire(run_dir, manifest, tshark)
             manifest.setdefault("validator_conclusion", {})["network"] = network["conclusion"]
             manifest.setdefault("validator_conclusion", {})["wire"] = wire["conclusion"]
             store.save(manifest)
