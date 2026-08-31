@@ -45,7 +45,14 @@
   "network_sensitivity": {
     "suite_id": "paper-v1-h3-network-sensitivity",
     "anchor_path_ids": ["xquic__cubic__pacing-off", "mvfst-h3__cubic__pacing-off"],
-    "profile_ids": ["rtt10_20m_q0p5_loss0", "rtt100_20m_q0p5_loss0", "queue2_20m_50ms_loss0", "loss0p1_20m_50ms_q0p5"],
+    "profile_ids": ["rtt10_20m_q0p5_loss0", "rtt100_20m_q0p5_loss0", "queue2_20m_50ms_loss0"],
     "repetitions": 5
+  },
+  "optional_appendix_loss": {
+    "suite_id": "paper-v1-h3-optional-loss-appendix",
+    "anchor_path_ids": ["xquic__cubic__pacing-off", "mvfst-h3__cubic__pacing-off"],
+    "profile_ids": ["loss0p1_20m_50ms_q0p5"],
+    "repetitions": 5,
+    "enabled_by_default": false
   }
 }

@@ -7,10 +7,12 @@ from paper_v1.build_identity import BuildIdentityError, verify_build_manifest
 from paper_v1.io import load_json
 from paper_v1.matrix import (
     MAIN_RUN_COUNT,
+    OPTIONAL_LOSS_RUN_COUNT,
     SENSITIVITY_RUN_COUNT,
     SMOKE_RUN_COUNT,
     load_matrix,
     planned_runs,
+    planned_optional_loss_runs,
     planned_sensitivity_runs,
 )
 from paper_v1.policy import load_policy_spec
@@ -79,7 +81,10 @@ def run_preflight(local_config_path, matrix_path, policy_spec_path, allow_dirty=
         raise PreflightError("canonical matrix must plan 400 main runs")
     sensitivity_runs = len(list(planned_sensitivity_runs(matrix)))
     if sensitivity_runs != SENSITIVITY_RUN_COUNT:
-        raise PreflightError("canonical matrix must plan 160 sensitivity runs")
+        raise PreflightError("canonical matrix must plan 120 sensitivity runs")
+    optional_loss_runs = len(list(planned_optional_loss_runs(matrix)))
+    if optional_loss_runs != OPTIONAL_LOSS_RUN_COUNT:
+        raise PreflightError("optional loss appendix must plan 40 runs")
     return {
         "status": "static_preflight_passed",
         "paper_eligible": not allow_dirty,
@@ -87,6 +92,7 @@ def run_preflight(local_config_path, matrix_path, policy_spec_path, allow_dirty=
         "runtime_preflights_completed": 0,
         "planned_runs": expected_runs,
         "sensitivity_runs": sensitivity_runs,
+        "optional_loss_appendix_runs": optional_loss_runs,
         "preflight_runs": SMOKE_RUN_COUNT,
         "paths": len(matrix["paths"]),
         "policy_schema": policies["policy_schema"],

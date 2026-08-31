@@ -11,8 +11,11 @@ Paper-v1 exporter.
   Neqo/Chrome, Chrome/Neqo.
 - Per-path repetitions: ten for CUBIC and Reno/NewReno, five for exploratory
   BBR. This produces 400 baseline-network runs.
-- Two anchor paths, four additional network profiles and five repetitions
-  produce 160 network-sensitivity runs.
+- Two anchor paths, three additional loss-free network profiles and five
+  repetitions produce 120 core network-sensitivity runs.
+- A 40-run forward 0.1% random-loss suite is disabled by default and may be
+  used only as an optional appendix after the no-random-loss causal chain is
+  complete.
 - One 30 s run, 5–25 s measurement window, one shared server process/listening
   port, two independent client local ports/connections, one long H3 stream per
   connection and at least 1 GiB available per response.
@@ -26,6 +29,8 @@ cp configs/paper-v1/local.example.json /absolute/private/location/local.json
 scripts/paper_v1_plan --repetitions 1
 scripts/paper_v1_plan --suite sensitivity
 scripts/paper_v1_plan --suite all
+scripts/paper_v1_plan --suite appendix-loss
+scripts/paper_v1_plan --suite all-with-appendix
 scripts/paper_v1_preflight --local-config /absolute/private/location/local.json
 scripts/paper_v1_plan
 scripts/paper_v1_validate /absolute/path/to/one/attempt
@@ -34,8 +39,10 @@ scripts/paper_v1_export /absolute/path/to/dataset /absolute/new/export/path
 
 `plan --repetitions 1` prints the 44 Linux smoke attempts: one for each of
 11 paths × four policy pairs. It does not start them. The default full plan
-prints 400 baseline-network identities, `--suite sensitivity` prints 160, and
-`--suite all` prints 560. Planning never starts collection implicitly.
+prints 400 baseline-network identities, `--suite sensitivity` prints 120, and
+the default core `--suite all` prints 520. The optional `--suite appendix-loss`
+prints 40; `--suite all-with-appendix` prints 560. Planning never starts
+collection implicitly.
 
 The exact queue byte counts in `configs/paper-v1/matrix.json` are normative.
 The historical `q0p5`/`q2` strings are profile labels, not values that the
@@ -108,6 +115,7 @@ recorded in `docs/PAPER_V1_NETWORK_PREFLIGHT.md`.
 
 Do not start the 400-run baseline corpus until all 44 Linux smoke attempts
 pass, the four mvfst-H3 configurations pass all H3/CC/pacing/wire/artifact
-gates, and the operator explicitly authorizes formal collection. Run the 160
-network-sensitivity attempts only after the baseline corpus and its network
-evidence pass.
+gates, and the operator explicitly authorizes formal collection. Run the 120
+loss-free network-sensitivity attempts only after the baseline corpus and its
+network evidence pass. The 40 loss runs are not a core gate and must not be
+scheduled unless the core causal analysis is complete and time remains.

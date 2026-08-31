@@ -23,7 +23,11 @@ The explicit `base_20m_50ms_q0p5_loss0` profile produced:
 The first ping was 75.5 ms while neighbor/path state warmed up. Steady samples,
 not the first probe, must be used for the RTT gate.
 
-## Forward-only 0.1% random loss
+## Optional appendix: forward-only 0.1% random loss
+
+This profile is an implementation micro-test and an optional appendix
+treatment. It is not part of the core main or network-sensitivity plan and does
+not block core corpus admission.
 
 The `loss0p1_20m_50ms_q0p5` profile installed `loss-random.loss=0.001` only on
 the forward `ifb0` netem. The reverse netem contained no loss rule.

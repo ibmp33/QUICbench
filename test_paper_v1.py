@@ -13,7 +13,12 @@ from paper_v1.manifest import (
     transition,
 )
 from network.set_netem import _netem_clause, resolve_netem_parameters
-from paper_v1.matrix import load_matrix, planned_runs, planned_sensitivity_runs
+from paper_v1.matrix import (
+    load_matrix,
+    planned_optional_loss_runs,
+    planned_runs,
+    planned_sensitivity_runs,
+)
 from paper_v1.policy import load_policy_spec
 from paper_v1.validate import REQUIRED_ARTIFACT_ROLES, validate_run
 from stacks.mvfst import MvfstH3
@@ -35,7 +40,13 @@ class PaperV1Test(unittest.TestCase):
         self.assertEqual(len(matrix["paths"]), 11)
         self.assertEqual(len(list(planned_runs(matrix))), 400)
         self.assertEqual(len(list(planned_runs(matrix, repetitions=1))), 44)
-        self.assertEqual(len(list(planned_sensitivity_runs(matrix))), 160)
+        self.assertEqual(len(list(planned_sensitivity_runs(matrix))), 120)
+        self.assertEqual(len(list(planned_optional_loss_runs(matrix))), 40)
+        self.assertNotIn(
+            "loss0p1_20m_50ms_q0p5",
+            matrix["network_sensitivity"]["profile_ids"],
+        )
+        self.assertFalse(matrix["optional_appendix_loss"]["enabled_by_default"])
         self.assertTrue(all(item["protocol"] == "http3" for item in matrix["paths"]))
         self.assertEqual(
             sum(item["sender"] == "mvfst" for item in matrix["paths"]), 4
