@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from paper_v1.runner import PaperV1Runner, _path_for_run
+from paper_v1.evidence import saturation_threshold
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -66,6 +67,10 @@ class PaperV1RunnerTest(unittest.TestCase):
         self.assertIn("-initial-dcid-length 16", joined)
         self.assertIn("test.xquic.com", command)
         self.assertIn("54434", command)
+
+    def test_smoke_gate_does_not_change_paper_admission_threshold(self):
+        self.assertEqual(saturation_threshold(True), 0.85)
+        self.assertEqual(saturation_threshold(False), 0.90)
 
 
 if __name__ == "__main__":
