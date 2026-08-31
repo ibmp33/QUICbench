@@ -42,6 +42,7 @@ class PaperV1TopologyTest(unittest.TestCase):
         self.assertIn("limit 125000", forward_tbf[0])
         self.assertEqual(reverse_tbf, [])
         self.assertTrue(any("qb-client tc qdisc" in command and "delay 25ms" in command for command in joined))
+        self.assertTrue(any("qb-client ping -c 2" in command for command in joined))
 
     def test_optional_loss_is_forward_only(self):
         calls = []

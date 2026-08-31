@@ -126,8 +126,20 @@ class NamespaceTopology:
                 "off",
                 "tx-udp-segmentation",
                 "off",
-            )
+        )
         self.apply_profile()
+        self.warmup()
+
+    def warmup(self):
+        # Linux TBF delays the first packet after qdisc creation by roughly one
+        # latency interval. Consume that initialization artifact before the
+        # baseline snapshot; validators subtract the recorded baseline qdisc
+        # counters from the active/after counters.
+        self._ns(
+            self.client_namespace,
+            "ping", "-c", "2", "-i", "0.1", "-W", "1", self.server_ip,
+            stdout=subprocess.DEVNULL,
+        )
 
     def apply_profile(self):
         p = self.profile
