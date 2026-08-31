@@ -142,8 +142,9 @@ class PaperV1Runner:
         env = os.environ.copy()
         cwd = run_dir
         if sender == "quic-go":
+            runtime = os.path.join(run_dir, "sender-runtime-initial.jsonl")
             argv = [binary, "-addr", "{}:{}".format(server_ip, port), "-cert", cert, "-key", key,
-                    "-root", root, "-qlog-dir", qlog_dir]
+                    "-root", root, "-qlog-dir", qlog_dir, "-paper-v1-runtime-report", runtime]
         elif sender == "quiche":
             env["QLOGDIR"] = qlog_dir
             env["RUST_LOG"] = "info"
@@ -371,7 +372,8 @@ class PaperV1Runner:
             "receiver_qlog_flow_a": first_file(os.path.join(run_dir, "flow_a", "qlog")),
             "receiver_qlog_flow_b": first_file(os.path.join(run_dir, "flow_b", "qlog")),
             "sender_qlog": server_qlog_archive if os.path.getsize(server_qlog_archive) > 10240 else None,
-            "sender_runtime": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
+            "sender_runtime": os.path.join(run_dir, "sender-runtime.jsonl"),
+            "sender_runtime_raw": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
             "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
             "network_evidence": os.path.join(run_dir, "network-evidence.json"),
         }

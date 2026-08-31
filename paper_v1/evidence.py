@@ -169,6 +169,46 @@ def derive_network(run_dir, manifest):
 def write_derived_evidence(run_dir, manifest):
     runtime = derive_runtime(run_dir, manifest)
     network = derive_network(run_dir, manifest)
+    sender = derive_sender(run_dir, manifest)
+    if sender:
+        runtime["sender"] = sender
     atomic_write_json(os.path.join(run_dir, "runtime-evidence.json"), runtime)
     atomic_write_json(os.path.join(run_dir, "network-evidence.json"), network)
     return runtime, network
+
+
+def derive_sender(run_dir, manifest):
+    """Summarize direct sender transport events; never infer from requested CLI alone."""
+    requested = manifest["requested"]["sender"]
+    raw_path = os.path.join(run_dir, "sender-runtime-initial.jsonl")
+    if not os.path.isfile(raw_path) or os.path.getsize(raw_path) == 0:
+        return None
+    events = _jsonl(raw_path)
+    if requested["sender"] != "quic-go":
+        return None
+    controllers = [event for event in events if event.get("event") == "controller_initialized"]
+    consumed = [event for event in events if event.get("event") == "pacer_packet_consumed"]
+    deadlines = [event for event in events if event.get("event") == "pacing_deadline_computed"]
+    active = {event.get("active_cc") for event in controllers}
+    if len(active) != 1 or not controllers:
+        return None
+    first = controllers[0]
+    datagram = first.get("initial_max_datagram_size", 0)
+    cwnd = first.get("initial_congestion_window_bytes", 0)
+    final = {
+        "schema_version": "sender-runtime-v1.0.0", "event": "sender_final",
+        "sender": "quic-go", "active_cc": next(iter(active)), "fallback": False,
+        "configured_pacing": "default", "effective_pacing": "paced",
+        "pacer_initialized": len(consumed) >= len(controllers),
+        "pacing_callback_or_tick_observed": bool(consumed and deadlines),
+        "icw": int(cwnd / datagram) if datagram else None,
+        "binary_sha256": requested["binary_sha256"],
+        "direct_event_counts": {"controller_initialized": len(controllers),
+                                "pacer_packet_consumed": len(consumed),
+                                "pacing_deadline_computed": len(deadlines)},
+        "raw_runtime_sha256": sha256_file(raw_path),
+    }
+    final_path = os.path.join(run_dir, "sender-runtime.jsonl")
+    with open(final_path, "w", encoding="utf-8") as artifact:
+        artifact.write(json.dumps(final, sort_keys=True) + "\n")
+    return final
