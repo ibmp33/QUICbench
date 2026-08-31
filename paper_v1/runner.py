@@ -185,12 +185,18 @@ class PaperV1Runner:
         server_name = "test.xquic.com" if path["sender"] == "xquic" else self.config["tls"].get("server_name", "server")
         local_ports = self.config["network"].get("client_local_ports", [54433, 54434])
         local_port = local_ports[0 if flow_id == "flow_a" else 1]
+        stream_window = int(self.config["network"].get("receiver_stream_window_bytes", 134217728))
+        connection_window = int(self.config["network"].get("receiver_connection_window_bytes", 134217728))
         argv = [binary, "-paper-v1", "-protocol", "http3", "-ack-policy", policy,
                 "-ack-policy-log", os.path.join(flow_dir, "receiver-policy.jsonl"),
                 "-flow-id", flow_id, "-policy-spec-sha256", policy_hash,
                 "-url", "https://{}:{}/{}".format(server_ip, port, response_bytes),
                 "-server-name", server_name, "-insecure", "-local-port", str(local_port),
                 "-initial-dcid-length", str(int(self.config["network"].get("initial_dcid_length", 16))),
+                "-initial-stream-receive-window", str(stream_window),
+                "-max-stream-receive-window", str(stream_window),
+                "-initial-connection-receive-window", str(connection_window),
+                "-max-connection-receive-window", str(connection_window),
                 "-start-at-unix-ns", str(start_ns), "-start-timeout", "10s",
                 "-duration", "{}s".format(duration_s), "-metrics", os.path.join(flow_dir, "metrics.csv"),
                 "-o", "/dev/null", "-qlog-dir", qlog_dir,
@@ -242,7 +248,13 @@ class PaperV1Runner:
                      initial_dcid_length=int(self.config["network"].get("initial_dcid_length", 16))),
             ],
             "network_profile": profile,
-            "workload": dict(self.matrix["workload"], smoke=bool(smoke), effective_duration_s=duration_s),
+            "workload": dict(
+                self.matrix["workload"], smoke=bool(smoke), effective_duration_s=duration_s,
+                receiver_stream_window_bytes=int(self.config["network"].get(
+                    "receiver_stream_window_bytes", 134217728)),
+                receiver_connection_window_bytes=int(self.config["network"].get(
+                    "receiver_connection_window_bytes", 134217728)),
+            ),
             "receiver_binary_sha256": _binary_sha256(self.config["binaries"]["receiver"]),
             "maximum_start_skew_ms": int(self.config["network"].get("maximum_start_skew_ms", 20)),
         }

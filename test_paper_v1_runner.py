@@ -65,6 +65,8 @@ class PaperV1RunnerTest(unittest.TestCase):
         self.assertIn("-ack-policy chrome-like-ack", joined)
         self.assertIn("-keylog", command)
         self.assertIn("-initial-dcid-length 16", joined)
+        self.assertIn("-initial-stream-receive-window 134217728", joined)
+        self.assertIn("-max-connection-receive-window 134217728", joined)
         self.assertIn("test.xquic.com", command)
         self.assertIn("54434", command)
 

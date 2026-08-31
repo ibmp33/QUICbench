@@ -479,6 +479,7 @@ def validate_run(run_dir, policy_spec_path):
     _validate_runtime_evidence(manifest, artifacts, issues)
     runtime = manifest.get("runtime_reported", {})
     runtime_flows = runtime.get("flows", [])
+    requested_workload = requested.get("workload", {})
     if len(runtime_flows) != 2 or {item.get("flow_id") for item in runtime_flows} != {"flow_a", "flow_b"}:
         issues.append(_issue("h3_flow_mapping", "exactly two runtime flows required", "workload"))
     else:
@@ -518,13 +519,24 @@ def validate_run(run_dir, policy_spec_path):
             requested_flow = next(item for item in flows if item["flow_id"] == flow["flow_id"])
             if flow.get("initial_dcid_length") != requested_flow.get("initial_dcid_length"):
                 issues.append(_issue("initial_dcid_identity", flow.get("flow_id"), "workload"))
+            stream_window = requested_workload.get("receiver_stream_window_bytes")
+            connection_window = requested_workload.get("receiver_connection_window_bytes")
+            if stream_window is not None and any(
+                flow.get(field) != stream_window
+                for field in ("initial_stream_receive_window_bytes", "max_stream_receive_window_bytes")
+            ):
+                issues.append(_issue("stream_receive_window_identity", flow.get("flow_id"), "workload"))
+            if connection_window is not None and any(
+                flow.get(field) != connection_window
+                for field in ("initial_connection_receive_window_bytes", "max_connection_receive_window_bytes")
+            ):
+                issues.append(_issue("connection_receive_window_identity", flow.get("flow_id"), "workload"))
         if None in connection_ids or len(connection_ids) != 2:
             issues.append(_issue("connection_isolation", repr(connection_ids), "workload"))
         if None in local_ports or len(local_ports) != 2:
             issues.append(_issue("client_local_ports", repr(local_ports), "workload"))
     workload = runtime.get("workload", {})
     is_smoke = bool(runtime.get("smoke"))
-    requested_workload = requested.get("workload", {})
     workload_checks = {
         "protocol": "http3",
         "server_process_count": 1,
