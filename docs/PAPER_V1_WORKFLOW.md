@@ -30,6 +30,7 @@ scripts/paper_v1_plan --repetitions 1
 scripts/paper_v1_plan --suite sensitivity
 scripts/paper_v1_plan --suite all
 scripts/paper_v1_preflight --local-config /absolute/private/location/local.json
+sudo -E scripts/paper_v1_smoke --local-config /absolute/private/location/local.json
 scripts/paper_v1_plan
 scripts/paper_v1_validate /absolute/path/to/one/attempt
 scripts/paper_v1_export /absolute/path/to/dataset /absolute/new/export/path
@@ -40,6 +41,14 @@ scripts/paper_v1_export /absolute/path/to/dataset /absolute/new/export/path
 prints 400 baseline-network identities, `--suite sensitivity` prints 120, and
 `--suite all` prints 520 (400 baseline plus 120 loss-free sensitivity runs).
 Planning never starts collection implicitly.
+
+`paper_v1_smoke` is the minimal end-to-end Linux gate. It executes five-second
+attempts for all 11 paths × four ordered policy pairs, validates every attempt,
+and writes an incremental JSON summary under `dataset_root/_smoke_reports`.
+It returns zero only when all 44 cells are valid. Use `--resume` after an
+interruption to skip cells that already have a `completed_valid` smoke attempt;
+use repeated `--path-id` arguments to test selected paths while developing.
+These attempts are always marked non-paper-eligible and cannot enter exports.
 
 The exact queue byte counts in `configs/paper-v1/matrix.json` are normative.
 The historical `q0p5`/`q2` strings are profile labels, not values that the
@@ -117,5 +126,4 @@ Do not start the 400-run baseline corpus until all 44 Linux smoke attempts
 pass, the four mvfst-H3 configurations pass all H3/CC/pacing/wire/artifact
 gates, and the operator explicitly authorizes formal collection. Run the 120
 loss-free network-sensitivity attempts only after the baseline corpus and its
-network evidence pass. The 40 loss runs are not a core gate and must not be
-scheduled unless the core causal analysis is complete and time remains.
+network evidence pass. Paper-v1 does not schedule an active-loss suite.

@@ -82,6 +82,9 @@ def handoff_sudo_artifacts(path):
     if sudo_uid is None or sudo_gid is None:
         return
     uid, gid = int(sudo_uid), int(sudo_gid)
+    if os.path.isfile(path):
+        os.chown(path, uid, gid)
+        return
     for directory, child_directories, filenames in os.walk(path):
         os.chown(directory, uid, gid)
         for name in child_directories:

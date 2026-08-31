@@ -15,6 +15,7 @@ from paper_v1.matrix import (
 )
 from paper_v1.preflight import run_preflight
 from paper_v1.runner import PaperV1Runner, handoff_sudo_artifacts
+from paper_v1.smoke import run_smoke_suite
 from paper_v1.validate import validate_run
 
 
@@ -54,6 +55,15 @@ def _parser():
     run.add_argument("--matrix", default=DEFAULT_MATRIX)
     run.add_argument("--policy-spec", default=DEFAULT_POLICY_SPEC)
     run.add_argument("--smoke", action="store_true")
+
+    smoke = subparsers.add_parser("smoke")
+    smoke.add_argument("--local-config", required=True)
+    smoke.add_argument("--matrix", default=DEFAULT_MATRIX)
+    smoke.add_argument("--policy-spec", default=DEFAULT_POLICY_SPEC)
+    smoke.add_argument("--path-id", action="append")
+    smoke.add_argument("--resume", action="store_true")
+    smoke.add_argument("--fail-fast", action="store_true")
+    smoke.add_argument("--summary")
 
     export = subparsers.add_parser("export")
     export.add_argument("dataset_dir")
@@ -102,6 +112,16 @@ def main(argv=None):
         finally:
             handoff_sudo_artifacts(run_dir)
         result["run_dir"] = run_dir
+    elif args.command == "smoke":
+        result = run_smoke_suite(
+            args.local_config,
+            args.matrix,
+            args.policy_spec,
+            path_ids=args.path_id,
+            resume=args.resume,
+            fail_fast=args.fail_fast,
+            summary_path=args.summary,
+        )
     elif args.command == "preflight":
         result = run_preflight(
             args.local_config,
@@ -130,6 +150,10 @@ def main(argv=None):
     else:
         raise AssertionError(args.command)
     print(json.dumps(result, indent=2, sort_keys=True))
+    if args.command == "smoke":
+        return 0 if result["all_valid"] else 1
+    if args.command == "run" and args.smoke:
+        return 0 if result.get("smoke_valid") else 2
     return 0 if result.get("paper_eligible", True) else 2
 
 

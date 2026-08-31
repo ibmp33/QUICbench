@@ -10,6 +10,7 @@ from paper_v1.runner import (
     _transport_log_path,
     validate_storage,
 )
+from paper_v1.smoke import SmokeSuiteError, _valid_existing_attempt, smoke_plan
 from paper_v1.evidence import (
     _qdisc_counter_deltas,
     derive_sender,
@@ -130,6 +131,28 @@ class PaperV1RunnerTest(unittest.TestCase):
         self.assertEqual(bottleneck["active_to_after"][0]["delta"]["packets"], 30)
         self.assertEqual(bottleneck["before_to_after"][0]["delta"]["bytes"], 500)
         self.assertEqual(bottleneck["before_to_after"][0]["end_backlog_bytes"], 18)
+
+    def test_smoke_plan_covers_each_path_and_policy_pair_once(self):
+        runs = smoke_plan(self.runner.matrix)
+        self.assertEqual(len(runs), 44)
+        self.assertEqual(len({run["run_id"] for run in runs}), 44)
+        selected = smoke_plan(self.runner.matrix, ["xquic__cubic__pacing-off"])
+        self.assertEqual(len(selected), 4)
+        with self.assertRaisesRegex(SmokeSuiteError, "unknown path IDs"):
+            smoke_plan(self.runner.matrix, ["not-a-path"])
+
+    def test_smoke_resume_only_accepts_completed_valid_attempt(self):
+        dataset = os.path.join(self.temp.name, "resume-dataset")
+        run_id = "one-run"
+        invalid = os.path.join(dataset, run_id, "attempt-invalid")
+        valid = os.path.join(dataset, run_id, "attempt-valid")
+        os.makedirs(invalid)
+        os.makedirs(valid)
+        with open(os.path.join(invalid, "validation.json"), "w", encoding="utf-8") as artifact:
+            json.dump({"status": "completed_invalid", "smoke_valid": False}, artifact)
+        with open(os.path.join(valid, "validation.json"), "w", encoding="utf-8") as artifact:
+            json.dump({"status": "completed_valid", "smoke_valid": True}, artifact)
+        self.assertEqual(_valid_existing_attempt(dataset, run_id), valid)
 
     def test_transport_log_role_only_exists_for_log_derived_senders(self):
         self.assertIsNone(_transport_log_path("quic-go", self.temp.name))
