@@ -30,6 +30,66 @@ class RunError(RuntimeError):
     pass
 
 
+def validate_storage(config, smoke=False):
+    """Fail before an attempt is created when its storage is not safe."""
+    dataset_root = os.path.abspath(config["dataset_root"])
+    storage = config.get("storage", {})
+    minimum_free_bytes = storage.get("minimum_free_bytes")
+    if minimum_free_bytes is None:
+        if not smoke:
+            raise RunError("formal runs require storage.minimum_free_bytes")
+        minimum_free_bytes = 1024 ** 3
+    try:
+        minimum_free_bytes = int(minimum_free_bytes)
+    except (TypeError, ValueError) as error:
+        raise RunError("storage.minimum_free_bytes must be an integer") from error
+    if minimum_free_bytes <= 0:
+        raise RunError("storage.minimum_free_bytes must be positive")
+    if not smoke:
+        resolved_root = os.path.realpath(dataset_root)
+        volatile_roots = tuple(
+            os.path.realpath(root) for root in ("/tmp", "/var/tmp", "/run")
+        )
+        if any(
+            resolved_root == root or resolved_root.startswith(root + os.sep)
+            for root in volatile_roots
+        ):
+            raise RunError("formal dataset_root must not use volatile storage: {}".format(
+                dataset_root
+            ))
+    os.makedirs(dataset_root, exist_ok=True)
+    usage = shutil.disk_usage(dataset_root)
+    if usage.free < minimum_free_bytes:
+        raise RunError(
+            "insufficient dataset storage: free={} required={}".format(
+                usage.free, minimum_free_bytes
+            )
+        )
+    return {
+        "dataset_root": dataset_root,
+        "minimum_free_bytes": minimum_free_bytes,
+        "free_bytes_before_attempt": usage.free,
+        "volatile_storage_allowed_for_smoke": bool(smoke),
+    }
+
+
+def handoff_sudo_artifacts(path):
+    """Return sudo-created attempt artifacts to the invoking local user."""
+    if os.geteuid() != 0:
+        return
+    sudo_uid = os.environ.get("SUDO_UID")
+    sudo_gid = os.environ.get("SUDO_GID")
+    if sudo_uid is None or sudo_gid is None:
+        return
+    uid, gid = int(sudo_uid), int(sudo_gid)
+    for directory, child_directories, filenames in os.walk(path):
+        os.chown(directory, uid, gid)
+        for name in child_directories:
+            os.chown(os.path.join(directory, name), uid, gid)
+        for name in filenames:
+            os.chown(os.path.join(directory, name), uid, gid)
+
+
 def _mkdir(path):
     os.makedirs(path, exist_ok=True)
     return path
@@ -226,6 +286,7 @@ class PaperV1Runner:
     def run(self, run_id, attempt_id=None, smoke=False):
         NamespaceTopology.require_root()
         planned, path, profile = _path_for_run(self.matrix, run_id)
+        storage_evidence = validate_storage(self.config, smoke=smoke)
         attempt_id = attempt_id or "attempt-{}".format(uuid.uuid4().hex[:12])
         run_dir = os.path.join(self.config["dataset_root"], run_id, attempt_id)
         if os.path.exists(run_dir):
@@ -274,6 +335,7 @@ class PaperV1Runner:
             ),
             "receiver_binary_sha256": _binary_sha256(self.config["binaries"]["receiver"]),
             "maximum_start_skew_ms": int(self.config["network"].get("maximum_start_skew_ms", 20)),
+            "storage": storage_evidence,
         }
         store.save(manifest)
         capture = server = None
@@ -367,7 +429,10 @@ class PaperV1Runner:
             for process in reversed(self.processes):
                 if process.process and process.process.poll() is None:
                     process.stop(reason="cleanup")
-            topology.teardown()
+            try:
+                topology.teardown()
+            finally:
+                handoff_sudo_artifacts(run_dir)
 
     def _collect_artifacts(self, run_dir, store):
         manifest = store.load()

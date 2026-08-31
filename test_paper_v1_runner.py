@@ -3,7 +3,13 @@ import os
 import tempfile
 import unittest
 
-from paper_v1.runner import PaperV1Runner, _path_for_run, _transport_log_path
+from paper_v1.runner import (
+    PaperV1Runner,
+    RunError,
+    _path_for_run,
+    _transport_log_path,
+    validate_storage,
+)
 from paper_v1.evidence import derive_sender, measurement_window, saturation_threshold
 
 
@@ -87,6 +93,18 @@ class PaperV1RunnerTest(unittest.TestCase):
     def test_smoke_gate_does_not_change_paper_admission_threshold(self):
         self.assertEqual(saturation_threshold(True), 0.85)
         self.assertEqual(saturation_threshold(False), 0.90)
+
+    def test_storage_gate_allows_tmp_only_for_smoke(self):
+        config = {"dataset_root": "/tmp", "storage": {"minimum_free_bytes": 1}}
+        evidence = validate_storage(config, smoke=True)
+        self.assertEqual(evidence["minimum_free_bytes"], 1)
+        with self.assertRaisesRegex(RunError, "volatile storage"):
+            validate_storage(config, smoke=False)
+
+    def test_formal_storage_gate_requires_explicit_reserve(self):
+        durable_root = os.path.join("/private", "tmp", os.path.basename(self.temp.name))
+        with self.assertRaisesRegex(RunError, "storage.minimum_free_bytes"):
+            validate_storage({"dataset_root": durable_root}, smoke=False)
 
     def test_transport_log_role_only_exists_for_log_derived_senders(self):
         self.assertIsNone(_transport_log_path("quic-go", self.temp.name))

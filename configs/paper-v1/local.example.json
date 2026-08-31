@@ -1,5 +1,8 @@
 {
   "dataset_root": "/absolute/path/to/paper-v1-datasets",
+  "storage": {
+    "minimum_free_bytes": 21474836480
+  },
   "repositories": {
     "quicbench": "/absolute/path/to/QUICbench",
     "quic-go": "/absolute/path/to/quic-go-ack-policies",

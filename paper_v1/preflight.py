@@ -40,7 +40,32 @@ def run_preflight(local_config_path, matrix_path, policy_spec_path, allow_dirty=
     config = load_json(local_config_path)
     matrix = load_matrix(matrix_path)
     policies = load_policy_spec(policy_spec_path)
+    for section in ("repositories", "binaries", "tools", "build_manifests"):
+        if not isinstance(config.get(section), dict) or not config[section]:
+            raise PreflightError("local config requires non-empty {}".format(section))
+    if "dataset_root" not in config:
+        raise PreflightError("local config requires dataset_root")
     _absolute_dir(config["dataset_root"], "dataset_root")
+    storage = config.get("storage", {})
+    try:
+        minimum_free_bytes = int(storage["minimum_free_bytes"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise PreflightError(
+            "local config requires positive integer storage.minimum_free_bytes"
+        ) from error
+    if minimum_free_bytes <= 0:
+        raise PreflightError("storage.minimum_free_bytes must be positive")
+    dataset_root = os.path.realpath(os.path.abspath(config["dataset_root"]))
+    volatile_roots = tuple(
+        os.path.realpath(root) for root in ("/tmp", "/var/tmp", "/run")
+    )
+    if any(
+        dataset_root == root or dataset_root.startswith(root + os.sep)
+        for root in volatile_roots
+    ):
+        raise PreflightError("formal dataset_root must not use volatile storage")
+    if os.statvfs(dataset_root).f_bavail * os.statvfs(dataset_root).f_frsize < minimum_free_bytes:
+        raise PreflightError("dataset_root does not satisfy minimum free-space gate")
     for name, path in config["repositories"].items():
         _absolute_dir(path, "repository {}".format(name))
     for name, path in config["binaries"].items():

@@ -14,7 +14,7 @@ from paper_v1.matrix import (
     planned_sensitivity_runs,
 )
 from paper_v1.preflight import run_preflight
-from paper_v1.runner import PaperV1Runner
+from paper_v1.runner import PaperV1Runner, handoff_sudo_artifacts
 from paper_v1.validate import validate_run
 
 
@@ -93,9 +93,14 @@ def main(argv=None):
         print(json.dumps({"count": len(runs), "runs": runs}, indent=2))
         return 0
     if args.command == "run":
+        if not args.smoke:
+            run_preflight(args.local_config, args.matrix, args.policy_spec)
         runner = PaperV1Runner(args.local_config, args.matrix, args.policy_spec)
         run_dir = runner.run(args.run_id, attempt_id=args.attempt_id, smoke=args.smoke)
-        result = validate_run(run_dir, args.policy_spec)
+        try:
+            result = validate_run(run_dir, args.policy_spec)
+        finally:
+            handoff_sudo_artifacts(run_dir)
         result["run_dir"] = run_dir
     elif args.command == "preflight":
         result = run_preflight(
