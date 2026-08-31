@@ -414,6 +414,30 @@ class PaperV1Test(unittest.TestCase):
             self.assertIn("ack_frequency_observed", {item["code"] for item in result["issues"]})
             self.assertEqual(load_json(os.path.join(violation_dir, "run_manifest.json"))["state"], "completed_invalid")
 
+    def test_validator_marks_valid_smoke_non_paper_eligible(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = os.path.join(temp_dir, "smoke")
+            self._write_valid_run(run_dir)
+            manifest_path = os.path.join(run_dir, "run_manifest.json")
+            manifest = load_json(manifest_path)
+            manifest["requested"]["workload"] = {"smoke": True, "effective_duration_s": 5}
+            manifest["runtime_reported"]["smoke"] = True
+            manifest["runtime_reported"]["workload"]["duration_s"] = 5
+            manifest["runtime_reported"]["workload"]["measurement_window_start_s"] = 0
+            manifest["runtime_reported"]["workload"]["measurement_window_end_s"] = 5
+            runtime_path = os.path.join(run_dir, "runtime_evidence.artifact")
+            runtime = load_json(runtime_path)
+            runtime["workload"] = manifest["runtime_reported"]["workload"]
+            atomic_write_json(runtime_path, runtime)
+            for artifact in manifest["artifacts"]:
+                if artifact["role"] == "runtime_evidence":
+                    artifact["sha256"] = sha256_file(runtime_path)
+            atomic_write_json(manifest_path, manifest)
+            result = validate_run(run_dir, SPEC)
+            self.assertEqual(result["status"], "completed_valid")
+            self.assertTrue(result["smoke_valid"])
+            self.assertFalse(result["paper_eligible"])
+
     def test_export_rejects_legacy_dataset(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             atomic_write_json(

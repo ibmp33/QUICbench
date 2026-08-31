@@ -516,15 +516,17 @@ def validate_run(run_dir, policy_spec_path):
         if None in local_ports or len(local_ports) != 2:
             issues.append(_issue("client_local_ports", repr(local_ports), "workload"))
     workload = runtime.get("workload", {})
+    is_smoke = bool(runtime.get("smoke"))
+    requested_workload = requested.get("workload", {})
     workload_checks = {
         "protocol": "http3",
         "server_process_count": 1,
         "server_listening_port_count": 1,
         "server_application_ready": True,
         "body_counter": "client-decoded-http3-response-body-bytes",
-        "duration_s": 30,
-        "measurement_window_start_s": 5,
-        "measurement_window_end_s": 25,
+        "duration_s": requested_workload.get("effective_duration_s", 30) if is_smoke else 30,
+        "measurement_window_start_s": 0 if is_smoke else 5,
+        "measurement_window_end_s": requested_workload.get("effective_duration_s", 5) if is_smoke else 25,
     }
     for field, expected in workload_checks.items():
         if workload.get(field) != expected:
@@ -558,17 +560,19 @@ def validate_run(run_dir, policy_spec_path):
         if wire.get(key) is not True:
             issues.append(_issue("wire_gate", key, "wire"))
     status = "completed_valid" if not issues else "completed_invalid"
+    paper_eligible = not issues and not is_smoke
     result = {
         "dataset_schema": DATASET_SCHEMA,
         "run_id": manifest.get("run_id"),
         "attempt_id": manifest.get("attempt_id"),
         "status": status,
-        "paper_eligible": not issues,
+        "paper_eligible": paper_eligible,
+        "smoke_valid": bool(is_smoke and not issues),
         "issues": issues,
     }
     if manifest.get("state") == "validating":
         finalized = transition(manifest, status)
-        finalized["paper_eligible"] = not issues
+        finalized["paper_eligible"] = paper_eligible
         finalized["exclusion_reasons"] = [item["code"] for item in issues]
         finalized.setdefault("validator_conclusion", {})["paper_v1"] = result
         atomic_write_json(manifest_path, finalized)
