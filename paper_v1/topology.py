@@ -131,24 +131,28 @@ class NamespaceTopology:
 
     def apply_profile(self):
         p = self.profile
+        rate = "{}mbit".format(p["forward_bandwidth_mbps"])
+        queue = str(int(p["queue_size_bytes"]))
+        burst = max(1500, int(float(p["forward_bandwidth_mbps"]) * 1_000_000 / 8 / 250))
+        # TBF must be the root. Putting TBF below netem adds roughly one TBF
+        # latency interval to the first packet after idle on Linux, turning the
+        # requested 50 ms RTT into about 100 ms in the base profile.
+        self._ns(
+            self.server_namespace,
+            "tc", "qdisc", "replace", "dev", self.server_interface,
+            "root", "handle", "1:", "tbf",
+            "rate", rate, "burst", str(burst), "limit", queue,
+        )
         forward_netem = [
             "tc", "qdisc", "replace", "dev", self.server_interface,
-            "root", "handle", "1:", "netem", "delay", "{}ms".format(p["forward_delay_ms"]),
+            "parent", "1:1", "handle", "10:", "netem",
+            "delay", "{}ms".format(p["forward_delay_ms"]),
         ]
         forward_loss = float(p.get("random_loss_forward_percent", 0))
         if forward_loss:
             forward_netem.extend(["loss", "random", "{}%".format(forward_loss)])
         forward_netem.extend(["limit", "100000"])
         self._ns(self.server_namespace, *forward_netem)
-        rate = "{}mbit".format(p["forward_bandwidth_mbps"])
-        queue = "{}b".format(int(p["queue_size_bytes"]))
-        burst = max(1500, int(float(p["forward_bandwidth_mbps"]) * 1_000_000 / 8 / 250))
-        self._ns(
-            self.server_namespace,
-            "tc", "qdisc", "replace", "dev", self.server_interface,
-            "parent", "1:1", "handle", "10:", "tbf",
-            "rate", rate, "burst", "{}b".format(burst), "limit", queue,
-        )
         self._ns(
             self.client_namespace,
             "tc", "qdisc", "replace", "dev", self.client_interface,

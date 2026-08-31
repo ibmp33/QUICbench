@@ -37,8 +37,9 @@ class PaperV1TopologyTest(unittest.TestCase):
         forward_tbf = [command for command in joined if "qb-server tc qdisc" in command and " tbf " in command]
         reverse_tbf = [command for command in joined if "qb-client tc qdisc" in command and " tbf " in command]
         self.assertEqual(len(forward_tbf), 1)
+        self.assertIn("root handle 1: tbf", forward_tbf[0])
         self.assertIn("rate 20mbit", forward_tbf[0])
-        self.assertIn("limit 125000b", forward_tbf[0])
+        self.assertIn("limit 125000", forward_tbf[0])
         self.assertEqual(reverse_tbf, [])
         self.assertTrue(any("qb-client tc qdisc" in command and "delay 25ms" in command for command in joined))
 
