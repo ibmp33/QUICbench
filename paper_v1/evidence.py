@@ -54,8 +54,10 @@ def derive_runtime(run_dir, manifest):
                     if "stream_data_blocked" in line or '"data_blocked"' in line:
                         blocked = True
                         break
-        increases = sum(1 for left, right in zip(rows, rows[1:]) if right[1] > left[1])
         max_gap = max((right[0] - left[0] for left, right in zip(rows, rows[1:])), default=10**9)
+        read_calls = int(labels.get("Body read calls", "0"))
+        read_processing_gap_ns = int(labels.get("Maximum body read processing gap ns", str(10**18)))
+        continuous_read = read_calls > 1 and read_processing_gap_ns <= 250_000_000
         content_length = int(labels.get("Content-Length", "-1"))
         decoded = int(labels.get("Bytes", rows[-1][1] if rows else 0))
         flows.append({
@@ -75,9 +77,11 @@ def derive_runtime(run_dir, manifest):
             "stream_count": 1,
             "decoded_body_bytes": decoded,
             "measurement_window_body_bytes": _bytes_at(rows, window_end * 1000) - _bytes_at(rows, window_start * 1000),
-            "client_continuous_read": len(rows) >= 2 and max_gap <= 250 and increases >= max(1, len(rows) - 3),
+            "client_continuous_read": continuous_read,
             "flow_control_blocked_in_window": blocked,
-            "application_limited_in_window": not (len(rows) >= 2 and max_gap <= 250 and increases >= max(1, len(rows) - 3)),
+            "application_limited_in_window": not continuous_read,
+            "body_read_calls": read_calls,
+            "maximum_body_read_processing_gap_ns": read_processing_gap_ns,
             "metrics_sample_count": len(rows),
             "maximum_metrics_gap_ms": max_gap,
         })
