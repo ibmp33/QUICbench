@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from paper_v1.wire import _align_pcap, _parse_pcap_ack_rows, _qlog_acks, _tool_command
+from paper_v1.wire import _align_pcap, _parse_pcap_ack_rows, _qlog_acks, _tool_command, _validation_window
 
 
 class PaperV1WireTest(unittest.TestCase):
@@ -41,6 +41,16 @@ class PaperV1WireTest(unittest.TestCase):
         rows = _parse_pcap_ack_rows("1.250000000\t7,6\t2,3\n")
         self.assertEqual([item["largest"] for item in rows], [7, 6])
         self.assertEqual([item["ack_delay_ns"] for item in rows], [16000, 24000])
+
+    def test_smoke_wire_window_has_terminal_guard_but_paper_window_does_not(self):
+        manifest = {"runtime_reported": {"smoke": True, "workload": {
+            "measurement_window_start_s": 0, "measurement_window_end_s": 5,
+        }}}
+        self.assertEqual(_validation_window(manifest), (0, 4_900_000_000, 100_000_000))
+        manifest["runtime_reported"].update({"smoke": False, "workload": {
+            "measurement_window_start_s": 5, "measurement_window_end_s": 25,
+        }})
+        self.assertEqual(_validation_window(manifest), (5_000_000_000, 25_000_000_000, 0))
 
 
 if __name__ == "__main__":

@@ -119,6 +119,14 @@ def _align_pcap(qlog, pcap):
     return aligned
 
 
+def _validation_window(manifest):
+    workload = manifest["runtime_reported"]["workload"]
+    start_ns = int(workload["measurement_window_start_s"] * 1_000_000_000)
+    end_ns = int(workload["measurement_window_end_s"] * 1_000_000_000)
+    terminal_guard_ns = 100_000_000 if manifest["runtime_reported"].get("smoke") else 0
+    return start_ns, end_ns - terminal_guard_ns, terminal_guard_ns
+
+
 def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
     pcap = os.path.join(run_dir, "trace.pcap")
     flows = []
@@ -132,8 +140,13 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
         keylog_path = os.path.join(flow_dir, "tls.keys")
         policy_events = _jsonl(policy_path)
         initialized = next(event for event in policy_events if event.get("event") == "policy_initialized")
-        episodes = [event for event in policy_events if event.get("event") == "ack_episode"]
-        qlog = _qlog_acks(qlog_path)
+        all_episodes = [event for event in policy_events if event.get("event") == "ack_episode"]
+        all_qlog = _qlog_acks(qlog_path)
+        start_ns, end_ns, terminal_guard_ns = _validation_window(manifest)
+        selected = [index for index, event in enumerate(all_qlog)
+                    if start_ns <= event["time_ns"] < end_ns]
+        qlog = [all_qlog[index] for index in selected]
+        episodes = [all_episodes[index] for index in selected if index < len(all_episodes)]
         pcap_rows, command = _pcap_acks(tshark, pcap, keylog_path, int(next(
             flow["client_local_port"] for flow in manifest["runtime_reported"]["flows"] if flow["flow_id"] == flow_id)))
         commands.append(command)
@@ -173,6 +186,10 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
             "ack_delay_observed": delay_match, "policy_log_matches_wire": consistent,
             "qlog_matches_pcap": pcap_match, "ack_delay_units_valid": delay_match and pcap_match,
             "transition_matches_wire": transition_match,
+            "validation_window_start_ns": start_ns,
+            "validation_window_end_ns": end_ns,
+            "terminal_guard_ns": terminal_guard_ns,
+            "ack_episodes_excluded_outside_window": len(all_qlog) - len(qlog),
         })
     version = subprocess.run(_tool_command(tshark, "--version"), check=True, capture_output=True, text=True).stdout.splitlines()[0]
     evidence = {
