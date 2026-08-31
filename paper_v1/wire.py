@@ -35,7 +35,13 @@ def _qlog_acks(path):
                 continue
             ranges = frame.get("acked_ranges", [])
             acknowledged = set()
-            for smallest, largest in ranges:
+            for ack_range in ranges:
+                if len(ack_range) == 1:
+                    smallest = largest = ack_range[0]
+                elif len(ack_range) == 2:
+                    smallest, largest = ack_range
+                else:
+                    raise ValueError("invalid qlog ACK range: {!r}".format(ack_range))
                 acknowledged.update(range(int(smallest), int(largest) + 1))
             result.append({"time_ns": round(float(event["time"]) * 1_000_000),
                            "largest": max(acknowledged), "ack_delay_ns": round(float(frame.get("ack_delay", 0)) * 1_000_000),

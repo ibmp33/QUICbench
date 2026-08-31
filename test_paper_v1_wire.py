@@ -18,7 +18,7 @@ class PaperV1WireTest(unittest.TestCase):
                 {"time": 12.0, "name": "transport:packet_sent", "data": {
                     "header": {"packet_type": "1RTT"},
                     "frames": [{"frame_type": "ack", "ack_delay": 0.080,
-                                "acked_ranges": [[2, 11]]}]}},
+                                "acked_ranges": [[11], [2, 10]]}]}},
             ]
             with open(path, "w", encoding="utf-8") as artifact:
                 for event in events:
