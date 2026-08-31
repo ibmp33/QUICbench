@@ -10,6 +10,7 @@ import time
 import uuid
 
 from paper_v1.io import atomic_write_json, load_json, sha256_file
+from paper_v1.evidence import write_derived_evidence
 from paper_v1.manifest import ManifestStore, new_manifest
 from paper_v1.matrix import load_matrix, planned_runs
 from paper_v1.policy import load_policy_spec
@@ -218,9 +219,10 @@ class PaperV1Runner:
         topology = NamespaceTopology(
             profile,
             server_namespace=self.config["network"].get("server_namespace", "qb-server"),
+            router_namespace=self.config["network"].get("router_namespace", "qb-router"),
             client_namespace=self.config["network"].get("client_namespace", "qb-client"),
             server_ip=self.config["network"].get("server_ip", "198.19.0.2"),
-            client_ip=self.config["network"].get("client_ip", "198.19.0.1"),
+            client_ip=self.config["network"].get("client_ip", "198.19.0.6"),
         )
         manifest["requested"] = {
             "sender": dict(path, binary_sha256=_binary_sha256(
@@ -237,6 +239,7 @@ class PaperV1Runner:
             "network_profile": profile,
             "workload": dict(self.matrix["workload"], smoke=bool(smoke), effective_duration_s=duration_s),
             "receiver_binary_sha256": _binary_sha256(self.config["binaries"]["receiver"]),
+            "maximum_start_skew_ms": int(self.config["network"].get("maximum_start_skew_ms", 20)),
         }
         store.save(manifest)
         capture = server = None
@@ -247,7 +250,7 @@ class PaperV1Runner:
             store.transition("preflight_passed")
             capture = ManagedProcess(
                 "capture",
-                self._ns_argv(topology.server_namespace, ["tcpdump", "-i", topology.server_interface, "-U", "-s", "0", "-w", os.path.join(run_dir, "trace.pcap"), "udp", "port", str(port)]),
+                self._ns_argv(topology.capture_namespace, ["tcpdump", "-i", topology.capture_interface, "-U", "-s", "0", "-w", os.path.join(run_dir, "trace.pcap"), "udp", "port", str(port)]),
                 os.path.join(run_dir, "capture.stdout.log"), os.path.join(run_dir, "capture.stderr.log"),
             ).start()
             self.processes.append(capture)
@@ -285,7 +288,9 @@ class PaperV1Runner:
             store.transition("collecting")
             manifest = store.load()
             manifest["processes"] = [process.record() for process in self.processes]
-            manifest["runtime_reported"] = {"smoke": bool(smoke)}
+            runtime, network = write_derived_evidence(run_dir, manifest)
+            manifest["runtime_reported"] = dict(runtime, smoke=bool(smoke))
+            manifest.setdefault("validator_conclusion", {})["network"] = network["conclusion"]
             store.save(manifest)
             self._collect_artifacts(run_dir, store)
             store.transition("validating")
@@ -367,6 +372,8 @@ class PaperV1Runner:
             "receiver_qlog_flow_b": first_file(os.path.join(run_dir, "flow_b", "qlog")),
             "sender_qlog": server_qlog_archive if os.path.getsize(server_qlog_archive) > 10240 else None,
             "sender_runtime": os.path.join(run_dir, "sender-runtime-initial.jsonl"),
+            "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
+            "network_evidence": os.path.join(run_dir, "network-evidence.json"),
         }
         atomic_write_json(role_paths["process_table"], [process.record() for process in self.processes])
         artifacts = []

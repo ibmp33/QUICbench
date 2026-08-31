@@ -38,7 +38,14 @@ REQUIRED_ARTIFACT_ROLES = {
     "client_stderr_flow_b",
     "capture_stderr",
     "sender_runtime",
+    "runtime_evidence",
+    "network_evidence",
     "wire_evidence",
+}
+
+EMPTY_LOG_ROLES = {
+    "server_stdout", "server_stderr", "client_stdout_flow_a", "client_stderr_flow_a",
+    "client_stdout_flow_b", "client_stderr_flow_b", "capture_stderr",
 }
 
 
@@ -121,7 +128,7 @@ def _validate_processes(manifest, issues):
                 _issue("capture_failed", str(process.get("exit_code")), "process")
             )
         if process.get("kind") == "server" and (
-            process.get("exit_code") not in (0, 124)
+            process.get("exit_code") not in (0, 124, -15)
             or process.get("termination_reason")
             not in ("normal", "duration_complete", "graceful_stop")
         ):
@@ -147,7 +154,7 @@ def _validate_artifacts(manifest, run_dir, issues):
         if not os.path.isfile(resolved):
             issues.append(_issue("artifact_not_found", role, "artifact"))
             continue
-        if os.path.getsize(resolved) == 0:
+        if os.path.getsize(resolved) == 0 and role not in EMPTY_LOG_ROLES:
             issues.append(_issue("artifact_empty", role, "artifact"))
             continue
         expected = record.get("sha256")
@@ -247,13 +254,12 @@ def _validate_policy_flow(flow, events, policy_spec, issues):
     episodes = [event for event in events if event.get("event") == "ack_episode"]
     if not episodes:
         issues.append(_issue("missing_ack_episodes", flow["flow_id"], "wire"))
-    for event in episodes:
+    for episode_index, event in enumerate(episodes):
         for field in (
             "ack_ranges",
             "largest_acknowledged",
             "newly_acknowledged_packet_count",
             "ack_batch_size",
-            "ack_spacing_ns",
             "ack_delay_ns",
             "effective_threshold",
             "trigger_reason",
@@ -267,6 +273,8 @@ def _validate_policy_flow(flow, events, policy_spec, issues):
                         "wire",
                     )
                 )
+        if episode_index > 0 and "ack_spacing_ns" not in event:
+            issues.append(_issue("ack_episode_field_missing", "{} ack_spacing_ns".format(flow["flow_id"]), "wire"))
 
 
 def _validate_sender_runtime(manifest, artifacts, issues):
@@ -376,6 +384,48 @@ def _validate_wire_evidence(artifacts, issues):
             issues.append(_issue("wire_transition_gate", flow.get("flow_id"), "wire"))
 
 
+def _validate_network_evidence(artifacts, issues):
+    artifact = artifacts.get("network_evidence")
+    if not artifact or not artifact.get("resolved_path"):
+        return {}
+    try:
+        evidence = load_json(artifact["resolved_path"])
+    except (OSError, json.JSONDecodeError) as error:
+        issues.append(_issue("network_evidence_invalid", str(error), "network"))
+        return {}
+    if evidence.get("schema_version") != "network-evidence-v1.0.0":
+        issues.append(_issue("network_evidence_schema", repr(evidence), "network"))
+    sources = evidence.get("source_artifact_sha256", {})
+    for role in ("qdisc_before", "qdisc_active", "qdisc_after"):
+        if role not in artifacts or sources.get(role) != artifacts[role].get("sha256"):
+            issues.append(_issue("network_source_identity", role, "network"))
+    conclusion = evidence.get("conclusion", {})
+    for key in (
+        "qdisc_matches_requested", "offloads_valid", "shared_bottleneck", "saturated",
+        "both_flows_active", "not_application_limited", "start_skew_valid",
+    ):
+        if conclusion.get(key) is not True:
+            issues.append(_issue("network_gate", key, "network"))
+    return conclusion
+
+
+def _validate_runtime_evidence(manifest, artifacts, issues):
+    artifact = artifacts.get("runtime_evidence")
+    if not artifact or not artifact.get("resolved_path"):
+        return
+    try:
+        evidence = load_json(artifact["resolved_path"])
+    except (OSError, json.JSONDecodeError) as error:
+        issues.append(_issue("runtime_evidence_invalid", str(error), "workload"))
+        return
+    if evidence.get("schema_version") != "runtime-derived-v1.0.0":
+        issues.append(_issue("runtime_evidence_schema", repr(evidence), "workload"))
+    runtime = manifest.get("runtime_reported", {})
+    for field in ("flows", "workload", "derivation"):
+        if runtime.get(field) != evidence.get(field):
+            issues.append(_issue("runtime_evidence_manifest_mismatch", field, "workload"))
+
+
 def validate_run(run_dir, policy_spec_path):
     run_dir = os.path.abspath(run_dir)
     manifest_path = os.path.join(run_dir, "run_manifest.json")
@@ -418,6 +468,8 @@ def validate_run(run_dir, policy_spec_path):
                     issues.append(_issue("policy_log_invalid", str(error), "treatment"))
     _validate_sender_runtime(manifest, artifacts, issues)
     _validate_wire_evidence(artifacts, issues)
+    _validate_network_evidence(artifacts, issues)
+    _validate_runtime_evidence(manifest, artifacts, issues)
     runtime = manifest.get("runtime_reported", {})
     runtime_flows = runtime.get("flows", [])
     if len(runtime_flows) != 2 or {item.get("flow_id") for item in runtime_flows} != {"flow_a", "flow_b"}:
@@ -498,18 +550,6 @@ def validate_run(run_dir, policy_spec_path):
     if requested_sender.get("sender") == "mvfst":
         if sender.get("h3_adapter_identity") != "mvfst + paper-v1 minimal H3 adapter":
             issues.append(_issue("mvfst_h3_identity", repr(sender), "sender_identity"))
-    network = manifest.get("validator_conclusion", {}).get("network", {})
-    for key in (
-        "qdisc_matches_requested",
-        "offloads_valid",
-        "shared_bottleneck",
-        "saturated",
-        "both_flows_active",
-        "not_application_limited",
-        "start_skew_valid",
-    ):
-        if network.get(key) is not True:
-            issues.append(_issue("network_gate", key, "network"))
     wire = manifest.get("validator_conclusion", {}).get("wire", {})
     for key in ("qlog_policy_consistent", "pcap_policy_consistent", "ack_delay_units_valid"):
         if wire.get(key) is not True:

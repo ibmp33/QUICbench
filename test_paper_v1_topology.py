@@ -35,13 +35,15 @@ class PaperV1TopologyTest(unittest.TestCase):
         topology.setup()
         joined = [" ".join(command) for command in calls]
         forward_tbf = [command for command in joined if "qb-server tc qdisc" in command and " tbf " in command]
-        reverse_tbf = [command for command in joined if "qb-client tc qdisc" in command and " tbf " in command]
+        all_tbf = [command for command in joined if " tc qdisc" in command and " tbf " in command]
         self.assertEqual(len(forward_tbf), 1)
+        self.assertEqual(all_tbf, forward_tbf)
         self.assertIn("root handle 1: tbf", forward_tbf[0])
         self.assertIn("rate 20mbit", forward_tbf[0])
         self.assertIn("limit 125000", forward_tbf[0])
-        self.assertEqual(reverse_tbf, [])
+        self.assertTrue(any("qb-router tc qdisc" in command and "delay 25ms" in command for command in joined))
         self.assertTrue(any("qb-client tc qdisc" in command and "delay 25ms" in command for command in joined))
+        self.assertTrue(any("qb-router sysctl -q -w net.ipv4.ip_forward=1" in command for command in joined))
         self.assertTrue(any("qb-client ping -c 2" in command for command in joined))
 
     def test_optional_loss_is_forward_only(self):
@@ -50,7 +52,7 @@ class PaperV1TopologyTest(unittest.TestCase):
         topology = NamespaceTopology(profile, runner=lambda argv, **kwargs: calls.append(argv) or mock.Mock(stdout="[]"))
         topology.apply_profile()
         joined = [" ".join(command) for command in calls]
-        self.assertTrue(any("qb-server" in command and "loss random 0.1%" in command for command in joined))
+        self.assertTrue(any("qb-router" in command and "loss random 0.1%" in command for command in joined))
         self.assertFalse(any("qb-client" in command and "loss random" in command for command in joined))
 
 

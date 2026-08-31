@@ -267,6 +267,38 @@ class PaperV1Test(unittest.TestCase):
                 ],
             },
         )
+        derived_flows = [
+            {
+                "flow_id": flow_id, "connection_id": "cid-{}".format(flow_id),
+                "client_local_port": 54433 if flow_id == "flow_a" else 54434,
+                "alpn": "h3", "http_status": 200, "headers_valid": True,
+                "response_content_length": 1073741824, "decoded_body_bytes": 1000000,
+                "measurement_window_body_bytes": 800000, "flow_control_blocked_in_window": False,
+                "application_limited_in_window": False, "stream_count": 1, "client_continuous_read": True,
+            }
+            for flow_id in ("flow_a", "flow_b")
+        ]
+        derived_workload = {
+            "protocol": "http3", "server_process_count": 1, "server_listening_port_count": 1,
+            "server_application_ready": True, "body_counter": "client-decoded-http3-response-body-bytes",
+            "duration_s": 30, "measurement_window_start_s": 5, "measurement_window_end_s": 25,
+        }
+        derivation = {"name": "test-deriver", "version": "1.0.0", "sources": ["fixtures"]}
+        atomic_write_json(files["runtime_evidence"], {
+            "schema_version": "runtime-derived-v1.0.0", "derivation": derivation,
+            "flows": derived_flows, "workload": derived_workload,
+        })
+        network_conclusion = {
+            "qdisc_matches_requested": True, "offloads_valid": True, "shared_bottleneck": True,
+            "saturated": True, "both_flows_active": True, "not_application_limited": True,
+            "start_skew_valid": True,
+        }
+        atomic_write_json(files["network_evidence"], {
+            "schema_version": "network-evidence-v1.0.0",
+            "source_artifact_sha256": {role: sha256_file(files[role])
+                                       for role in ("qdisc_before", "qdisc_active", "qdisc_after")},
+            "conclusion": network_conclusion,
+        })
         artifacts = [
             {
                 "role": role,
@@ -305,48 +337,9 @@ class PaperV1Test(unittest.TestCase):
                     },
                 },
                 "runtime_reported": {
-                    "flows": [
-                        {
-                            "flow_id": "flow_a",
-                            "connection_id": "cid-flow_a",
-                            "client_local_port": 54433,
-                            "alpn": "h3",
-                            "http_status": 200,
-                            "headers_valid": True,
-                            "response_content_length": 1073741824,
-                            "decoded_body_bytes": 1000000,
-                            "measurement_window_body_bytes": 800000,
-                            "flow_control_blocked_in_window": False,
-                            "application_limited_in_window": False,
-                            "stream_count": 1,
-                            "client_continuous_read": True,
-                        },
-                        {
-                            "flow_id": "flow_b",
-                            "connection_id": "cid-flow_b",
-                            "client_local_port": 54434,
-                            "alpn": "h3",
-                            "http_status": 200,
-                            "headers_valid": True,
-                            "response_content_length": 1073741824,
-                            "decoded_body_bytes": 1000000,
-                            "measurement_window_body_bytes": 800000,
-                            "flow_control_blocked_in_window": False,
-                            "application_limited_in_window": False,
-                            "stream_count": 1,
-                            "client_continuous_read": True,
-                        },
-                    ],
-                    "workload": {
-                        "protocol": "http3",
-                        "server_process_count": 1,
-                        "server_listening_port_count": 1,
-                        "server_application_ready": True,
-                        "body_counter": "client-decoded-http3-response-body-bytes",
-                        "duration_s": 30,
-                        "measurement_window_start_s": 5,
-                        "measurement_window_end_s": 25,
-                    },
+                    "flows": derived_flows,
+                    "workload": derived_workload,
+                    "derivation": derivation,
                     "sender": {
                         "active_cc": "bbr",
                         "fallback": False,
