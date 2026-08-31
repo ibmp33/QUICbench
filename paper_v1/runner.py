@@ -288,7 +288,12 @@ class PaperV1Runner:
             for client in clients:
                 if client.wait(timeout=duration_s + 15) != 0:
                     raise RunError("{} failed with {}".format(client.kind, client.process.returncode))
+            # Give packet-buffered tcpdump time to flush terminal QUIC packets
+            # before any process receives a stop signal. Wire validation still
+            # requires complete qlog/pcap correspondence.
+            time.sleep(0.5)
             server.stop()
+            time.sleep(0.5)
             capture.stop(sig=signal.SIGINT, reason="graceful_stop")
             self._write_snapshot(run_dir, "network-after", topology.snapshot())
             store.transition("collecting")
