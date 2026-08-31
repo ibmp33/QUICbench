@@ -384,6 +384,10 @@ class PaperV1Runner:
             "runtime_evidence": os.path.join(run_dir, "runtime-evidence.json"),
             "network_evidence": os.path.join(run_dir, "network-evidence.json"),
             "wire_evidence": os.path.join(run_dir, "wire-evidence.json"),
+            "wire_pcap_flow_a": os.path.join(run_dir, "wire-port-{}.pcap".format(
+                self.config["network"].get("client_local_ports", [54433, 54434])[0])),
+            "wire_pcap_flow_b": os.path.join(run_dir, "wire-port-{}.pcap".format(
+                self.config["network"].get("client_local_ports", [54433, 54434])[1])),
         }
         atomic_write_json(role_paths["process_table"], [process.record() for process in self.processes])
         artifacts = []

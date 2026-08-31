@@ -55,7 +55,14 @@ def _qlog_acks(path):
 
 
 def _pcap_acks(tshark, pcap, keylog, local_port):
-    command = [tshark, "-r", pcap, "-o", "tls.keylog_file:{}".format(keylog),
+    # Wireshark 3.6 can associate simultaneous QUIC handshakes incorrectly
+    # when only one connection's TLS secrets are supplied. Slice by the
+    # immutable local UDP port before decryption so each keylog is evaluated
+    # against exactly its own connection.
+    sliced = os.path.join(os.path.dirname(pcap), "wire-port-{}.pcap".format(local_port))
+    filter_command = [tshark, "-r", pcap, "-Y", "udp.port=={}".format(local_port), "-w", sliced]
+    subprocess.run(filter_command, check=True, capture_output=True, text=True)
+    command = [tshark, "-r", sliced, "-o", "tls.keylog_file:{}".format(keylog),
                "-Y", "udp.srcport=={} && quic.short && quic.ack.largest_acknowledged".format(local_port),
                "-T", "fields", "-E", "separator=/t", "-E", "occurrence=a",
                "-e", "frame.time_epoch", "-e", "quic.ack.largest_acknowledged", "-e", "quic.ack.ack_delay"]
@@ -71,7 +78,7 @@ def _pcap_acks(tshark, pcap, keylog, local_port):
         for index, value in enumerate(largest):
             result.append({"time_ns": round(float(times[0]) * 1_000_000_000), "largest": int(value),
                            "ack_delay_ns": int(delays[index]) * 8_000})
-    return result, command
+    return result, [filter_command, command]
 
 
 def _align_pcap(qlog, pcap):
