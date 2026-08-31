@@ -101,6 +101,9 @@ Illustrative field layouts are in `docs/EXAMPLE_PAPER_V1_RUN_MANIFEST.json`,
 `docs/EXAMPLE_PAPER_V1_ACK_EPISODE.jsonl`. The manifest example intentionally
 omits the long process/artifact inventory and is not itself validator input.
 
+The first Linux network-only evidence and its qdisc-counter interpretation are
+recorded in `docs/PAPER_V1_NETWORK_PREFLIGHT.md`.
+
 ## Formal-run hold
 
 Do not start the 400-run baseline corpus until all 44 Linux smoke attempts
