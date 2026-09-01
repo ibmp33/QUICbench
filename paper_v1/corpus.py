@@ -25,10 +25,23 @@ def _binary_hashes(config):
     return {name: sha256_file(path) for name, path in config["binaries"].items()}
 
 
-def verify_smoke_gate(matrix, policy_spec, config, smoke_dataset_root, binary_hashes):
+def corpus_plan(matrix, path_ids=None):
+    selected = set(path_ids or [])
+    known = {path["path_id"] for path in matrix["paths"]}
+    unknown = selected - known
+    if unknown:
+        raise CorpusError("unknown path IDs: {}".format(", ".join(sorted(unknown))))
+    return [
+        run for run in planned_runs(matrix)
+        if not selected or run["path_id"] in selected
+    ]
+
+
+def verify_smoke_gate(matrix, policy_spec, config, smoke_dataset_root, binary_hashes,
+                      path_ids=None):
     missing = []
     evidence = []
-    for planned in smoke_plan(matrix):
+    for planned in smoke_plan(matrix, path_ids=path_ids):
         expected = _smoke_identity(matrix, policy_spec, planned, binary_hashes)
         run_dir = _valid_existing_attempt(
             smoke_dataset_root, planned["run_id"], expected, require_smoke=True
@@ -49,7 +62,7 @@ def verify_smoke_gate(matrix, policy_spec, config, smoke_dataset_root, binary_ha
 def run_baseline_corpus(local_config_path, matrix_path, policy_spec_path,
                         smoke_dataset_root, resume=False, fail_fast=False,
                         max_consecutive_failures=3, summary_path=None,
-                        check_only=False):
+                        check_only=False, path_ids=None):
     if max_consecutive_failures <= 0:
         raise CorpusError("max_consecutive_failures must be positive")
     preflight = run_preflight(local_config_path, matrix_path, policy_spec_path)
@@ -58,9 +71,11 @@ def run_baseline_corpus(local_config_path, matrix_path, policy_spec_path,
     policy_spec = load_policy_spec(policy_spec_path)
     binary_hashes = _binary_hashes(config)
     smoke_evidence = verify_smoke_gate(
-        matrix, policy_spec, config, os.path.abspath(smoke_dataset_root), binary_hashes
+        matrix, policy_spec, config, os.path.abspath(smoke_dataset_root), binary_hashes,
+        path_ids=path_ids,
     )
-    runs = list(planned_runs(matrix))
+    selected = set(path_ids or [])
+    runs = corpus_plan(matrix, path_ids=path_ids)
     dataset_root = os.path.abspath(config["dataset_root"])
     if check_only:
         return {
@@ -68,6 +83,7 @@ def run_baseline_corpus(local_config_path, matrix_path, policy_spec_path,
             "all_valid": True,
             "planned": len(runs),
             "smoke_cells_verified": len(smoke_evidence),
+            "selected_path_ids": sorted(selected),
             "dataset_root": dataset_root,
             "minimum_free_bytes": int(config["storage"]["minimum_free_bytes"]),
             "static_preflight": preflight,
@@ -87,6 +103,7 @@ def run_baseline_corpus(local_config_path, matrix_path, policy_spec_path,
         "policy_spec": os.path.abspath(policy_spec_path),
         "smoke_dataset_root": os.path.abspath(smoke_dataset_root),
         "smoke_cells_verified": len(smoke_evidence),
+        "selected_path_ids": sorted(selected),
         "static_preflight": preflight,
         "resume": bool(resume),
         "planned": len(runs),

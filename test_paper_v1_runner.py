@@ -11,7 +11,9 @@ from paper_v1.runner import (
     validate_storage,
 )
 from paper_v1.smoke import SmokeSuiteError, _valid_existing_attempt, smoke_plan
+from paper_v1.corpus import CorpusError, corpus_plan
 from paper_v1.build_identity import _toolchain_identity, git_identity
+from paper_v1.matrix import load_matrix
 from paper_v1.evidence import (
     _qdisc_counter_deltas,
     derive_sender,
@@ -52,6 +54,17 @@ class PaperV1RunnerTest(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_corpus_path_filter_supports_isolated_icw_sensitivity(self):
+        matrix = load_matrix(MATRIX)
+        runs = corpus_plan(matrix, ["quic-go__cubic__default-pacer"])
+        self.assertEqual(len(runs), 40)
+        self.assertEqual(
+            {run["path_id"] for run in runs},
+            {"quic-go__cubic__default-pacer"},
+        )
+        with self.assertRaises(CorpusError):
+            corpus_plan(matrix, ["missing-path"])
 
     def test_all_sender_commands_are_h3_and_use_one_gibibyte(self):
         for path in self.runner.matrix["paths"]:

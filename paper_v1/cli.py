@@ -71,6 +71,7 @@ def _parser():
     corpus.add_argument("--smoke-dataset-root", required=True)
     corpus.add_argument("--matrix", default=DEFAULT_MATRIX)
     corpus.add_argument("--policy-spec", default=DEFAULT_POLICY_SPEC)
+    corpus.add_argument("--path-id", action="append")
     corpus.add_argument("--resume", action="store_true")
     corpus.add_argument("--fail-fast", action="store_true")
     corpus.add_argument("--max-consecutive-failures", type=int, default=3)
@@ -145,6 +146,7 @@ def main(argv=None):
             max_consecutive_failures=args.max_consecutive_failures,
             summary_path=args.summary,
             check_only=args.check_only,
+            path_ids=args.path_id,
         )
     elif args.command == "preflight":
         result = run_preflight(
