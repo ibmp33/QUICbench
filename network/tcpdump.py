@@ -1,5 +1,5 @@
 import subprocess
-from utils.remote_cmd import get_remote_cmd, get_pkill_remote_cmd
+import time
 
 class TCPDump:
     """
@@ -13,13 +13,28 @@ class TCPDump:
         self.output_file = output_file
 
     def start(self):
-        cmd = get_remote_cmd(self.server_hostname, self.get_start_cmd())
-        self.proc = subprocess.Popen(cmd)
+        self.proc = subprocess.Popen(
+            ["sudo", "-n", *self.get_start_cmd()],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        time.sleep(0.3)
+        if self.proc.poll() is not None:
+            stderr = (self.proc.stderr.read() or "").strip() if self.proc.stderr else ""
+            raise RuntimeError("tcpdump failed to start on {}: {}".format(self.interface, stderr or "unknown error"))
 
     def stop(self):
-        pattern_to_kill = " ".join(self.get_start_cmd())
-        subprocess.run(get_pkill_remote_cmd(self.server_hostname, pattern_to_kill), check=True)
-        self.proc.wait()
+        if not hasattr(self, "proc") or self.proc.poll() is not None:
+            return self.proc.returncode if hasattr(self, "proc") else None
+        # Stop exactly the capture process started by this object. A pattern-wide
+        # pkill can terminate captures belonging to another run or user.
+        self.proc.terminate()
+        try:
+            return self.proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            return self.proc.wait(timeout=5)
 
     def get_start_cmd(self):
         return ["tcpdump", "-B", "8192", "-i", self.interface, "-s", "100", "-w", self.output_file]

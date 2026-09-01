@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quicbench-paper-v1/receiver-ack-event-v1.0.0",
+  "type": "object",
+  "required": ["schema_version", "event", "connection_id", "flow_id", "policy_name", "policy_version", "policy_spec_sha256", "packet_number_space", "monotonic_time_ns"],
+  "properties": {
+    "schema_version": {"const": "receiver-ack-event-v1.0.0"},
+    "event": {"enum": ["policy_initialized", "policy_transition", "ack_episode", "ack_frequency_violation"]},
+    "policy_name": {"enum": ["neqo-like-ack", "chrome-like-ack"]},
+    "policy_version": {"const": "1.0.0"},
+    "packet_number_space": {"enum": ["initial", "handshake", "application_data"]},
+    "connection_id": {"type": "string", "minLength": 1},
+    "flow_id": {"enum": ["flow_a", "flow_b"]},
+    "policy_spec_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "monotonic_time_ns": {"type": "integer", "minimum": 0},
+    "packet_number": {"type": "integer", "minimum": 0},
+    "reference_packet_number": {"type": "integer", "minimum": 0},
+    "observed_packet_number": {"type": "integer", "minimum": 0},
+    "transition_boundary_packet_number": {"type": "integer", "minimum": 0},
+    "transition_sequence_number": {"type": "integer", "minimum": 1},
+    "effective_threshold": {"type": "integer", "minimum": 1},
+    "ack_batch_size": {"type": "integer", "minimum": 0},
+    "newly_acknowledged_packet_count": {"type": "integer", "minimum": 0},
+    "ack_spacing_ns": {"type": "integer", "minimum": 0},
+    "ack_delay_ns": {"type": "integer", "minimum": 0},
+    "timer_deadline_ns": {"type": "integer", "minimum": 0}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"event": {"const": "policy_initialized"}}},
+      "then": {"required": ["effective_parameters", "process_start_identity"]}
+    },
+    {
+      "if": {"properties": {"event": {"const": "policy_transition"}}},
+      "then": {"required": ["packet_number", "old_state", "new_state", "reason", "reference_packet_number", "observed_packet_number", "transition_boundary_packet_number", "transition_sequence_number"]}
+    },
+    {
+      "if": {"properties": {"event": {"const": "ack_episode"}}},
+      "then": {"required": ["packet_number", "ack_ranges", "largest_acknowledged", "newly_acknowledged_packet_count", "ack_batch_size", "ack_spacing_ns", "ack_delay_ns", "effective_threshold", "trigger_reason", "policy_state"]}
+    }
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quicbench-paper-v1/wire-ack-evidence-v1.0.0",
+  "type": "object",
+  "required": ["schema_version", "extractor", "source_artifact_sha256", "flows"],
+  "properties": {
+    "schema_version": {"const": "wire-ack-evidence-v1.0.0"},
+    "extractor": {
+      "type": "object",
+      "required": ["name", "version", "command", "tool_versions"]
+    },
+    "source_artifact_sha256": {"type": "object"},
+    "flows": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["flow_id", "policy_name", "ack_episode_count", "ack_batches", "ack_spacing_ns", "ack_delay_ns", "pcap_ack_frame_count", "qlog_ack_frame_count", "policy_log_matches_wire", "qlog_matches_pcap", "ack_delay_units_valid"]
+      }
+    }
+  },
+  "additionalProperties": true
+}

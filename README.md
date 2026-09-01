@@ -1,8 +1,77 @@
-# QUIC bench
+# QUICbench
 #### _Benchmarking tool for IETF QUIC stacks_
+
+> **Fork notice:** This repository is a fork of
+> [NUS-SNL/QUICbench](https://github.com/NUS-SNL/QUICbench). The original
+> project, Git history, publications, and MIT license are retained. This fork
+> adds a unified ACK-policy client and server adapters for a new QUIC
+> experimentation workflow.
 
 QUIC bench is a tool for automatic benchmarking of IETF QUIC stacks to help us understand their transport-layer performance.
 After being deployed on a testbed, and with the configurations specified, it can run benchmarking experiments, capture transport-layer metrics, and generate visualizations of these metrics.
+
+The scientific invariants for ACK-policy experiments are documented in
+[`EXPERIMENT_SEMANTICS.md`](EXPERIMENT_SEMANTICS.md). Main fairness runs keep
+one server process, one listening port, and two independent QUIC connections,
+and must pass workload-saturation validation.
+
+## Current paper workflow
+
+The canonical final-data workflow is **QUICbench Paper Dataset v1**. Start with
+[`docs/PAPER_V1_WORKFLOW.md`](docs/PAPER_V1_WORKFLOW.md), the frozen policy
+definition in [`docs/PAPER_V1_ACK_POLICIES.md`](docs/PAPER_V1_ACK_POLICIES.md),
+and the mvfst H3 evidence audit in
+[`docs/PAPER_V1_MVFST_H3_AUDIT.md`](docs/PAPER_V1_MVFST_H3_AUDIT.md).
+
+Paper-v1 uses only `neqo-like-ack` and `chrome-like-ack`. All 11 main
+sender/CC/pacing paths use HTTP/3, and mvfst is identified as
+`mvfst + paper-v1 minimal H3 adapter`. The frozen core plan contains 400 baseline
+runs, 120 loss-free network-sensitivity runs and 44 non-paper smoke runs. A
+separate 40-run forward-loss suite is disabled by default and reserved for an
+optional appendix. Old
+fixed-ratio, ACK_FREQUENCY, mvfst tperf/raw-QUIC and the commands below this
+section are retained as legacy/debug workflows and cannot enter the Paper-v1
+export.
+
+## Legacy extensions in this fork
+
+This fork separates the client ACK policy from the server implementation:
+
+- One client binary: `quic-go-policy-client`
+- ACK policies: `fixed2`, `fixed10`, `neqo`, and `chromium`
+- HTTP/3 server adapters: quic-go, Cloudflare quiche, and xquic
+- Raw QUIC stream server adapter: mvfst `tperf`
+- Per-run manifests containing protocol, policy, binary identity, commands,
+  policy parameters, shared server PID, paths, and timestamps
+- Existing qlog, metrics, local-port, synchronized-start, duration, and result
+  directory interfaces remain available to the experiment runners
+
+The source can be edited on macOS, but experiment commands target the Ubuntu
+22.04.4 test host. Runtime binaries and credentials are expected under:
+
+```text
+/home/ioio33/QUIC_project/bin
+```
+
+Generate and inspect Linux commands without launching an experiment:
+
+```bash
+python3 run_experiment.py --server quic-go --ack-policy fixed2 --dry-run
+python3 run_experiment.py --server mvfst --ack-policy chromium --dry-run
+```
+
+On the configured Ubuntu experiment host, omit `--dry-run` to launch the
+selected server and unified client:
+
+```bash
+python3 run_experiment.py --server quiche --ack-policy neqo
+python3 run_experiment.py --server xquic --ack-policy chromium
+```
+
+The original `run_bench.py` workflow and upstream documentation are preserved
+below for provenance and compatibility. New policy and fairness experiments use
+`run_experiment.py`, `run_A_single_flow_ack_ratio.py`, or
+`run_B0_two_flow_fairness_no_jitter.py`.
 
 ## Publications
 

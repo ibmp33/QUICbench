@@ -1,70 +1,259 @@
 import os
+import shlex
 import subprocess
-from utils.remote_cmd import get_remote_cmd
+
 from stacks.stack import Stack
+
 
 class Quiche(Stack):
     NAME = "quiche"
     CUBIC = "cubic"
     RENO = "reno"
+    INITIAL_RTT_MS = 50
 
-    def __init__(self, server_ip, server_hostname, server_pw_path,
-                 server_cargo_path, server_path, server_cert_path, server_key_path,
-                 server_static_file_dir, server_static_filename,
-                 client_cargo_path, client_path):
+    def __init__(
+        self,
+        server_ip,
+        server_hostname,
+        server_pw_path,
+        server_path,
+        client_path,
+        server_cert_path,
+        server_key_path,
+        root_dir=None,
+        server_root=None,
+        server_addr=None,
+        server_netns="quicbench-server",
+        client_netns="quicbench-client",
+        client_timeout="30s",
+        client_url_template=None,
+        workload_url_template=None,
+        workload_url_templates=None,
+        client_addr_template=None,
+        client_server_name=None,
+        protocol="http3",
+        default_port=None,
+        server_pacing=True,
+        server_gso=True,
+        workload_capabilities=None,
+    ):
         self.server_ip = server_ip
         self.server_hostname = server_hostname
-        self.server_cargo_path = server_cargo_path
         self.server_path = server_path
+        self.client_path = client_path
         self.server_cert_path = server_cert_path
         self.server_key_path = server_key_path
-        self.server_static_file_dir = server_static_file_dir
-        self.server_static_filename = server_static_filename
-        self.client_cargo_path = client_cargo_path
-        self.client_path = client_path
+        self.root_dir = root_dir
+        self.server_root = server_root
+        self.server_addr = server_addr
+        self.server_netns = server_netns
+        self.client_netns = client_netns
+        self.client_timeout = client_timeout
+        self.client_url_template = client_url_template
+        self.workload_url_template = workload_url_template
+        self.workload_url_templates = workload_url_templates or {}
+        self.client_addr_template = client_addr_template
+        self.client_server_name = client_server_name
+        self.protocol = protocol
+        self.default_port = default_port
+        self.server_pacing = bool(server_pacing)
+        self.server_gso = bool(server_gso)
+        self.workload_capabilities = workload_capabilities or {}
+        self.run_root = None
+        self.qlog_enabled = False
 
     def run_remote_server(self, port_no, cc_algo, duration_s):
-        cmd = self.run_server_cmd(port_no, cc_algo, duration_s)
-        cmd = get_remote_cmd(self.server_hostname, cmd)
-        return subprocess.Popen(cmd)
-
-    def run_remote_server_wlogs(self, port_no, cc_algo, duration_s, log_path):
-        cmd = self.run_server_cmd_wlogs(port_no, cc_algo, duration_s, log_path)
-        cmd = get_remote_cmd(self.server_hostname, cmd)
+        cmd = self.run_server_cmd(port_no, duration_s, cc_algo=cc_algo)
         return subprocess.Popen(cmd)
 
     def run_client(self, port_no, cc_algo, duration_s):
-        cmd = self.run_client_cmd(port_no, duration_s)
-        return subprocess.Popen(" ".join(cmd), shell=True)
+        cmd = self.run_client_cmd(port_no, duration_s, cc_algo=cc_algo)
+        return subprocess.Popen(cmd, shell=True)
 
-    def run_server_cmd(self, port_no, cc_algo, duration_s):
-        return map(str, [
-            "timeout", duration_s,
-            "{} run --manifest-path={} --bin quiche-server --".format(self.server_cargo_path, self.server_path),
-            "--cert {}".format(self.server_cert_path), "--key {}".format(self.server_key_path),
-            "--listen 0.0.0.0:{}".format(port_no), "--root {}".format(self.server_static_file_dir),
-            "--index {}".format(self.server_static_filename), "--cc-algorithm {}".format(cc_algo)
-        ])
+    def run_server_cmd(self, port_no, duration_s, cc_algo=None):
+        root_dir = self._get_root_dir(self.server_path)
+        run_dir = self._get_run_dir(port_no)
+        server_addr = self._get_server_addr(port_no)
+        cc_algo = cc_algo or self.CUBIC
 
-    def run_server_cmd_wlogs(self, port_no, cc_algo, duration_s, log_path):
-        log_dir = os.path.dirname(log_path)
-        return map(str, [
-            "export QLOGDIR={};".format(log_dir),
-            "timeout", duration_s,
-            "{} run --manifest-path={} --bin quiche-server --".format(self.server_cargo_path, self.server_path),
-            "--cert {}".format(self.server_cert_path), "--key {}".format(self.server_key_path),
-            "--listen 0.0.0.0:{}".format(port_no), "--root {}".format(self.server_static_file_dir),
-            "--index {}".format(self.server_static_filename), "--cc-algorithm {}".format(cc_algo), ";",
-            "mv {} {}".format(os.path.join(log_dir, "*.sqlog"), log_path)
-        ])        
+        parts = [
+            "cd {}".format(shlex.quote(root_dir)),
+            "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "qlogs", "server"))),
+            "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "logs"))),
+        ]
+        if self.qlog_enabled:
+            parts.append("export QLOGDIR={}".format(shlex.quote(os.path.join(run_dir, "qlogs", "server"))))
+        parts.append("export RUST_LOG=info")
 
-    def run_client_cmd(self, port_no, duration_s):
-        return map(str, [
-            "timeout", duration_s,
-            "{} run --manifest-path={} --bin quiche-client --".format(self.client_cargo_path, self.client_path),
-            "--no-verify", "https://{}:{}".format(self.server_ip, port_no),
-            "> /dev/null 2>&1"
-        ])
+        server_cmd = [
+            shlex.quote(self.server_path),
+            "--cert",
+            shlex.quote(self.server_cert_path),
+            "--key",
+            shlex.quote(self.server_key_path),
+            "--listen",
+            shlex.quote(server_addr),
+            "--http-version",
+            "HTTP/3",
+            "--no-retry",
+            "--cc-algorithm",
+            shlex.quote(cc_algo),
+        ]
+        if not self.server_pacing:
+            server_cmd.append("--disable-pacing")
+        if not self.server_gso:
+            server_cmd.append("--disable-gso")
+        if self.server_root:
+            server_cmd.extend(["--root", shlex.quote(self.server_root)])
+            server_cmd.extend(["--index", shlex.quote(os.path.basename(self._get_client_url(port_no).split("/")[-1] or "index.txt"))])
+
+        parts.append(
+            "timeout {} {}".format(int(duration_s), " ".join(server_cmd))
+            + " >{} 2>{}".format(
+                shlex.quote(os.path.join(run_dir, "logs", "server.stdout.log")),
+                shlex.quote(os.path.join(run_dir, "logs", "server.stderr.log")),
+            )
+        )
+
+        shell_cmd = " && ".join(parts)
+        return [
+            "sudo",
+            "-n",
+            "ip",
+            "netns",
+            "exec",
+            self.server_netns,
+            "bash",
+            "-lc",
+            shell_cmd,
+        ]
+
+    def get_server_runtime_config(self, cc_algo):
+        return {
+            "cc": cc_algo,
+            "requested_cc": cc_algo,
+            "icw": "implementation-default",
+            "pacing": "enabled" if self.server_pacing else "disabled",
+            "gso": "enabled" if self.server_gso else "disabled",
+            "control_source": "server-command-line",
+        }
+
+    def run_client_cmd(self, port_no, duration_s, cc_algo=None):
+        root_dir = self._get_root_dir(self.client_path)
+        run_dir = self._get_run_dir(port_no)
+        client_url = self._get_client_url(port_no)
+        client_timeout = self._get_client_timeout(duration_s)
+        cc_algo = cc_algo or self.CUBIC
+
+        parts = [
+            "cd {}".format(shlex.quote(root_dir)),
+            "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "qlogs", "client"))),
+            "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "stdout"))),
+            "mkdir -p {}".format(shlex.quote(os.path.join(run_dir, "logs"))),
+        ]
+        if self.qlog_enabled:
+            parts.append("export QLOGDIR={}".format(shlex.quote(os.path.join(run_dir, "qlogs", "client"))))
+
+        client_cmd = [
+            shlex.quote(self.client_path),
+            "--no-verify",
+            "--cc-algorithm",
+            shlex.quote(cc_algo),
+            "--disable-gso",
+            "--initial-rtt",
+            shlex.quote(str(self.INITIAL_RTT_MS)),
+            "--dump-responses",
+            shlex.quote(os.path.join(run_dir, "stdout")),
+            shlex.quote(client_url),
+        ]
+
+        parts.append(
+            "timeout {} {}".format(shlex.quote(client_timeout), " ".join(client_cmd))
+            + " >{} 2>{} </dev/null".format(
+                shlex.quote(os.path.join(run_dir, "logs", "client.stdout.log")),
+                shlex.quote(os.path.join(run_dir, "logs", "client.stderr.log")),
+            )
+        )
+
+        shell_cmd = " && ".join(parts)
+        return " ".join(
+            [
+                "sudo",
+                "-n",
+                "ip",
+                "netns",
+                "exec",
+                shlex.quote(self.client_netns),
+                "bash",
+                "-lc",
+                shlex.quote(shell_cmd),
+            ]
+        )
+
+    def _get_root_dir(self, binary_path):
+        if self.root_dir:
+            return self.root_dir
+        return os.path.dirname(binary_path) or "."
+
+    def _get_run_dir(self, port_no):
+        base_dir = self.run_root or os.path.join("/tmp", "quicbench")
+        return os.path.join(base_dir, self.NAME, str(port_no))
+
+    def set_run_root(self, run_root):
+        self.run_root = run_root
+
+    def set_qlog_enabled(self, enabled):
+        self.qlog_enabled = bool(enabled)
+
+    def get_flow_paths(self, port_no):
+        run_dir = self._get_run_dir(port_no)
+        return {
+            "run_dir": run_dir,
+            "server_qlog_dir": os.path.join(run_dir, "qlogs", "server"),
+            "client_qlog_dir": os.path.join(run_dir, "qlogs", "client"),
+            "server_stdout_log": os.path.join(run_dir, "logs", "server.stdout.log"),
+            "server_stderr_log": os.path.join(run_dir, "logs", "server.stderr.log"),
+            "client_stdout_log": os.path.join(run_dir, "logs", "client.stdout.log"),
+            "client_stderr_log": os.path.join(run_dir, "logs", "client.stderr.log"),
+        }
+
+    def _get_server_addr(self, port_no):
+        if self.server_addr:
+            return self.server_addr.format(port=port_no, server_ip=self.server_ip)
+        return "0.0.0.0:{}".format(port_no)
+
+    def _get_client_url(self, port_no, workload=None):
+        template = self.client_url_template
+        if workload:
+            template = self.workload_url_templates.get(
+                workload["name"], self.workload_url_template or template
+            )
+        if template:
+            return template.format(
+                port=port_no,
+                server_ip=self.server_ip,
+                bytes=workload["bytes"] if workload else "",
+            )
+        return "https://{}:{}/".format(self.server_ip, port_no)
+
+    def _get_client_timeout(self, duration_s):
+        if self.client_timeout:
+            return self.client_timeout
+        return "{}s".format(int(duration_s))
+
+    def get_client_target(self, port_no=None, workload=None):
+        port_no = str(port_no or self.default_port)
+        if not port_no or port_no == "None":
+            raise ValueError("no port supplied for stack '{}'".format(self.NAME))
+        target = {
+            "protocol": self.protocol,
+            "url": self._get_client_url(port_no, workload=workload),
+        }
+        if self.client_server_name:
+            target["server_name"] = self.client_server_name
+        if workload:
+            target["max_bytes"] = int(workload["bytes"])
+        return target
 
     @staticmethod
     def get_cc_algos():

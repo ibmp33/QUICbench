@@ -1,9 +1,6 @@
 {
-    "server_ip": "10.0.0.1",
-    "server_hostname": "edith",
-    "server_pw_path": "/home/quic/quic_experiments/edith_pw",
-    "server_repo_path": "/home/quic/quic_experiments/QUICbench",
-    "interface": "enp1s0f1",
+    "server_ip": "198.19.0.2",
+    "interface": "veth-host",
     "server_ingress_interface": "ifb0",
     "kernel_params": {
         "net.core.rmem_max": "12582912",
