@@ -9,6 +9,7 @@ from paper_v1.wire import (
     _parse_pcap_ack_rows,
     _qlog_acks,
     _tool_command,
+    _transition_wire_evidence,
     _validation_window,
 )
 
@@ -32,6 +33,25 @@ class PaperV1WireTest(unittest.TestCase):
 
         qlog[-1]["time_ns"] += 2_000_000
         valid, _, _ = _emission_timing(policy, qlog, limit_ns=1_000_000)
+        self.assertFalse(valid)
+
+    def test_emission_timing_allows_only_sparse_bounded_scheduler_spikes(self):
+        policy = [{"monotonic_time_ns": index * 1_000_000} for index in range(2000)]
+        qlog = [{"time_ns": item["monotonic_time_ns"] + 50_000_000} for item in policy]
+        qlog[1000]["time_ns"] += 30_000_000
+        valid, residuals, _ = _emission_timing(policy, qlog)
+        self.assertTrue(valid)
+        self.assertEqual(sum(abs(value) > 25_000_000 for value in residuals), 1)
+
+        qlog[1001]["time_ns"] += 30_000_000
+        qlog[1002]["time_ns"] += 30_000_000
+        valid, _, _ = _emission_timing(policy, qlog)
+        self.assertFalse(valid)
+
+        qlog[1001]["time_ns"] -= 30_000_000
+        qlog[1002]["time_ns"] -= 30_000_000
+        qlog[1000]["time_ns"] += 100_000_000
+        valid, _, _ = _emission_timing(policy, qlog)
         self.assertFalse(valid)
 
     def test_tool_command_supports_pinned_container_prefix(self):
@@ -68,6 +88,55 @@ class PaperV1WireTest(unittest.TestCase):
         rows = _parse_pcap_ack_rows("1.250000000\t7,6\t2,3\n")
         self.assertEqual([item["largest"] for item in rows], [7, 6])
         self.assertEqual([item["ack_delay_ns"] for item in rows], [16000, 24000])
+
+    def test_chrome_transition_accepts_first_received_packet_above_boundary(self):
+        transition = {
+            "event": "policy_transition",
+            "packet_number": 104,
+            "packet_number_space": "application_data",
+            "old_state": "initial-ack-every-2",
+            "new_state": "decimated-ack-every-10",
+            "reference_packet_number": 3,
+            "transition_boundary_packet_number": 103,
+            "observed_packet_number": 104,
+            "transition_sequence_number": 1,
+            "reason": "packet-number-reached-peer-first-plus-100",
+        }
+        qlog = [{"largest": 104, "ack_delay_ns": 8000, "acknowledged": {102, 104}}]
+        pcap = [{"time_ns": 1, "largest": 104, "ack_delay_ns": 8000}]
+        valid, evidence = _transition_wire_evidence(
+            "chrome-like-ack", [transition], qlog, pcap
+        )
+        self.assertTrue(valid)
+        self.assertEqual(evidence["overshoot"], 1)
+        self.assertTrue(evidence["qlog_confirmed"])
+        self.assertTrue(evidence["pcap_confirmed"])
+
+    def test_chrome_transition_rejects_early_or_unconfirmed_transition(self):
+        transition = {
+            "event": "policy_transition",
+            "packet_number": 102,
+            "packet_number_space": "application_data",
+            "old_state": "initial-ack-every-2",
+            "new_state": "decimated-ack-every-10",
+            "reference_packet_number": 3,
+            "transition_boundary_packet_number": 103,
+            "observed_packet_number": 102,
+            "transition_sequence_number": 1,
+            "reason": "packet-number-reached-peer-first-plus-100",
+        }
+        valid, _ = _transition_wire_evidence("chrome-like-ack", [transition], [], [])
+        self.assertFalse(valid)
+        transition["packet_number"] = 103
+        transition["observed_packet_number"] = 103
+        valid, evidence = _transition_wire_evidence("chrome-like-ack", [transition], [], [])
+        self.assertFalse(valid)
+        self.assertFalse(evidence["qlog_confirmed"])
+
+    def test_neqo_has_no_modeled_transition_gate(self):
+        valid, evidence = _transition_wire_evidence("neqo-like-ack", [], [], [])
+        self.assertTrue(valid)
+        self.assertIsNone(evidence)
 
     def test_smoke_wire_window_has_terminal_guard_but_paper_window_does_not(self):
         manifest = {"runtime_reported": {"smoke": True, "workload": {

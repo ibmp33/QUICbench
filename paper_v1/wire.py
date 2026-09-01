@@ -12,6 +12,8 @@ from paper_v1.io import atomic_write_json, sha256_file
 # emission. They use different zero points, and emission can be delayed by the
 # userspace scheduler. Keep the permitted variation explicit and report it.
 MAX_ACK_EMISSION_JITTER_NS = 25_000_000
+MAX_ACK_EMISSION_HARD_JITTER_NS = 100_000_000
+MAX_ACK_EMISSION_OUTLIER_FRACTION = 0.001
 
 
 def _jsonl(path):
@@ -133,8 +135,20 @@ def _validation_window(manifest):
     return start_ns, end_ns - terminal_guard_ns, terminal_guard_ns
 
 
-def _emission_timing(policy_events, qlog_events, limit_ns=MAX_ACK_EMISSION_JITTER_NS):
-    """Remove the clock-origin offset and bound decision-to-emission jitter."""
+def _emission_timing(
+    policy_events,
+    qlog_events,
+    limit_ns=MAX_ACK_EMISSION_JITTER_NS,
+    hard_limit_ns=MAX_ACK_EMISSION_HARD_JITTER_NS,
+    max_outlier_fraction=MAX_ACK_EMISSION_OUTLIER_FRACTION,
+):
+    """Remove clock offset and reject systematic or unbounded emission jitter.
+
+    A single scheduler spike must not invalidate tens of thousands of ACKs
+    whose policy, qlog and pcap evidence otherwise agrees. Sparse bounded
+    outliers are reported and allowed; sequence misalignment shifts many
+    residuals and still fails this gate.
+    """
     if len(policy_events) != len(qlog_events) or len(qlog_events) < 2:
         return False, [], 0
     offsets = sorted(
@@ -146,7 +160,63 @@ def _emission_timing(policy_events, qlog_events, limit_ns=MAX_ACK_EMISSION_JITTE
         int(observed["time_ns"]) - int(expected["monotonic_time_ns"]) - origin_ns
         for expected, observed in zip(policy_events, qlog_events)
     ]
-    return all(abs(value) <= limit_ns for value in residuals), residuals, origin_ns
+    outliers = sum(abs(value) > limit_ns for value in residuals)
+    valid = (
+        max(abs(value) for value in residuals) <= hard_limit_ns
+        and outliers / len(residuals) <= max_outlier_fraction
+    )
+    return valid, residuals, origin_ns
+
+
+def _transition_wire_evidence(policy_name, policy_events, qlog_events, pcap_rows):
+    """Validate the modeled transition and confirm its packet on qlog/pcap.
+
+    The Chrome-like boundary is a lower bound, not a promise that the packet
+    at the exact boundary is received. If that packet is lost or reordered,
+    the receiver transitions on the first observed ACK-eliciting packet above
+    the boundary. Requiring equality therefore rejects valid wire behavior.
+    """
+    if policy_name != "chrome-like-ack":
+        return True, None
+    transitions = [
+        event for event in policy_events
+        if event.get("event") == "policy_transition"
+        and event.get("old_state") != "uninitialized"
+    ]
+    if len(transitions) != 1:
+        return False, None
+    event = transitions[0]
+    reference = event.get("reference_packet_number")
+    observed = event.get("observed_packet_number")
+    boundary = event.get("transition_boundary_packet_number")
+    semantic_match = (
+        isinstance(reference, int)
+        and isinstance(observed, int)
+        and boundary == reference + 100
+        and observed >= boundary
+        and event.get("packet_number") == observed
+        and event.get("packet_number_space") == "application_data"
+        and event.get("old_state") == "initial-ack-every-2"
+        and event.get("new_state") == "decimated-ack-every-10"
+        and event.get("transition_sequence_number") == 1
+        and event.get("reason") == "packet-number-reached-peer-first-plus-100"
+    )
+    if not semantic_match:
+        return False, {"reference": reference, "boundary": boundary, "observed": observed,
+                       "qlog_confirmed": False, "pcap_confirmed": False}
+    acknowledging = next(
+        (ack for ack in qlog_events if observed in ack["acknowledged"]), None
+    )
+    qlog_confirmed = acknowledging is not None
+    pcap_confirmed = qlog_confirmed and bool(_align_pcap([acknowledging], pcap_rows))
+    return qlog_confirmed and pcap_confirmed, {
+        "reference": reference,
+        "boundary": boundary,
+        "observed": observed,
+        "overshoot": observed - boundary,
+        "qlog_confirmed": qlog_confirmed,
+        "pcap_confirmed": pcap_confirmed,
+    }
 
 
 def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
@@ -185,14 +255,16 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
             == {(int(value[0]), int(value[-1])) for value in observed["ranges"]}
             for event, observed in zip(episodes, qlog))
         emission_timing_valid, emission_residuals, clock_origin_offset_ns = _emission_timing(episodes, qlog)
+        emission_outlier_count = sum(
+            abs(value) > MAX_ACK_EMISSION_JITTER_NS for value in emission_residuals
+        )
         delay_match = len(qlog_delays) == len(policy_delays) and all(
             abs(a - b) <= 20_000 for a, b in zip(policy_delays, qlog_delays))
         pcap_match = len(aligned) == len(qlog) and all(
             abs(a["ack_delay_ns"] - b["ack_delay_ns"]) <= 20_000 for a, b in zip(aligned, qlog))
-        transition = [event for event in policy_events if event.get("event") == "policy_transition"
-                      and event.get("old_state") != "uninitialized"]
-        transition_match = initialized["policy_name"] != "chrome-like-ack" or (
-            len(transition) == 1 and transition[0]["observed_packet_number"] == transition[0]["reference_packet_number"] + 100)
+        transition_match, transition_evidence = _transition_wire_evidence(
+            initialized["policy_name"], policy_events, all_qlog, pcap_rows
+        )
         consistent = largest_match and range_match and emission_timing_valid and delay_match and pcap_match
         all_consistent = all_consistent and consistent and transition_match
         source_hashes.update({"receiver_qlog_{}".format(flow_id): sha256_file(qlog_path),
@@ -205,12 +277,19 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
             "ack_emission_residual_ns": emission_residuals,
             "ack_emission_clock_origin_offset_ns": clock_origin_offset_ns,
             "ack_emission_jitter_limit_ns": MAX_ACK_EMISSION_JITTER_NS,
+            "ack_emission_hard_jitter_limit_ns": MAX_ACK_EMISSION_HARD_JITTER_NS,
+            "ack_emission_outlier_count": emission_outlier_count,
+            "ack_emission_outlier_fraction": (
+                emission_outlier_count / len(emission_residuals) if emission_residuals else 0
+            ),
+            "ack_emission_max_outlier_fraction": MAX_ACK_EMISSION_OUTLIER_FRACTION,
             "ack_delay_ns": policy_delays,
             "pcap_ack_frame_count": len(aligned), "qlog_ack_frame_count": len(qlog),
             "ack_batch_observed": range_match, "ack_spacing_observed": emission_timing_valid,
             "ack_delay_observed": delay_match, "policy_log_matches_wire": consistent,
             "qlog_matches_pcap": pcap_match, "ack_delay_units_valid": delay_match and pcap_match,
             "transition_matches_wire": transition_match,
+            "transition_evidence": transition_evidence,
             "validation_window_start_ns": start_ns,
             "validation_window_end_ns": end_ns,
             "terminal_guard_ns": terminal_guard_ns,
@@ -219,7 +298,7 @@ def derive_wire(run_dir, manifest, tshark="/usr/bin/tshark"):
     version = subprocess.run(_tool_command(tshark, "--version"), check=True, capture_output=True, text=True).stdout.splitlines()[0]
     evidence = {
         "schema_version": "wire-ack-evidence-v1.0.0",
-        "extractor": {"name": "quicbench-wire-validator", "version": "1.0.0", "command": commands,
+        "extractor": {"name": "quicbench-wire-validator", "version": "1.1.0", "command": commands,
                       "tool_versions": {"tshark": version, "qlog_parser": "quicbench-1.0.0"}},
         "source_artifact_sha256": source_hashes, "flows": flows,
         "conclusion": {"qlog_policy_consistent": all_consistent, "pcap_policy_consistent": all_consistent,
